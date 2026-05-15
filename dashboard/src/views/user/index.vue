@@ -86,18 +86,21 @@
             <a-select
               v-model="userData.employeeId"
               showSearch
-              optionFilterProp="children"
-              placeholder="请选择已同步的企业微信成员"
+              allowClear
+              :filterOption="filterEmployeeOption"
+              placeholder="请选择已同步的企业微信成员（ID / UserID / 名称）"
               :loading="employeeFetching"
               @change="handleEmployeeChange">
               <a-select-option
                 v-for="item in employeeList"
                 :key="item.employeeId"
                 :value="item.employeeId"
+                :title="formatEmployeeOption(item)"
                 :disabled="item.logUserId && item.logUserId != userId">
-                {{ item.employeeName }}（{{ item.wxUserId }}）
+                {{ formatEmployeeOption(item) }}
               </a-select-option>
             </a-select>
+            <div class="field-tip">下拉列表展示企业成员ID、企业微信UserID和名称，可手动选择绑定。</div>
           </a-form-model-item>
           <a-form-model-item label="员工姓名:" prop="userName">
             <a-input v-model="userData.userName"></a-input>
@@ -248,6 +251,7 @@ export default {
       employeeList: [],
       employeeFetching: false,
       userData: {
+        employeeId: undefined,
         gender: 1,
         status: 0
       },
@@ -395,6 +399,11 @@ export default {
       })
     },
     handleEmployeeChange (employeeId) {
+      if (!employeeId) {
+        this.userData.employeeId = undefined
+        this.departmentList = []
+        return
+      }
       const employee = this.employeeList.find(item => item.employeeId === employeeId)
       if (!employee) {
         return
@@ -413,6 +422,16 @@ export default {
         this.roleList = res.data
         this.roleList.unshift(obj)
       })
+    },
+    formatEmployeeOption (employee) {
+      if (!employee) {
+        return ''
+      }
+      return `ID:${employee.employeeId} | ${employee.wxUserId} | ${employee.employeeName}`
+    },
+    filterEmployeeOption (input, option) {
+      const text = (option.componentOptions.children[0].text || '').toLowerCase()
+      return text.includes((input || '').toLowerCase())
     },
     // 添加子账户
     addSubManagement () {
@@ -439,6 +458,7 @@ export default {
               this.btnLoading = false
               this.modalVisible = false
               this.userData = {
+                employeeId: undefined,
                 gender: 1,
                 status: 0
               }
@@ -468,6 +488,7 @@ export default {
               this.modalVisible = false
               this.getTableData()
               this.userData = {
+                employeeId: undefined,
                 gender: 1,
                 status: 0
               }
@@ -486,6 +507,7 @@ export default {
     reset () {
       this.modalVisible = false
       this.userData = {
+        employeeId: undefined,
         gender: 1,
         status: 0
       }
@@ -501,7 +523,10 @@ export default {
       }).then(res => {
         this.modalVisible = true
         this.userId = res.data.userId
-        this.userData = res.data
+        this.userData = {
+          ...res.data,
+          employeeId: res.data.employeeId || undefined
+        }
         this.getEmployeeList()
         this.departmentList = res.data.department
       })
@@ -550,5 +575,11 @@ export default {
       white-space: nowrap;
     }
   }
+}
+.field-tip {
+  color: #999;
+  font-size: 12px;
+  line-height: 20px;
+  margin-top: 4px;
 }
 </style>
