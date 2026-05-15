@@ -53,12 +53,10 @@ class DashboardAuthMiddleware extends AuthMiddleware
                 throw new UnauthorizedException("Without authorization from {$guard->getName()} guard", $guard);
             }
 
-            $request = Context::override(ServerRequestInterface::class, function (ServerRequestInterface $request) use ($guard) {
-                $token = $guard->parseToken();
-                $jwt = $guard->getJwtManager()->parse($token);
-                $uid = $jwt->getPayload()['uid'] ?? null;
-                $user = $uid ? $guard->getProvider()->retrieveByCredentials($uid) : null;
-                $userInfo = $user ? $user->toArray() : [];
+            $request = Context::override(ServerRequestInterface::class, function (ServerRequestInterface $request) use ($guard, $user) {
+                // Reuse the authenticated model so corpIds/workEmployeeId are always
+                // resolved through the model's canonical retrieveById flow.
+                $userInfo = $user->toArray();
                 return $request->withAttribute('user', $userInfo);
             });
         }

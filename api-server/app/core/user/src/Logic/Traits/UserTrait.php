@@ -47,13 +47,18 @@ trait UserTrait
         ## 员工所有部门path
         $deptService = $container->get(WorkDepartmentContract::class);
         $deptPaths = $deptService->getWorkDepartmentsById(array_column($depts, 'departmentId'), ['id', 'path']);
+        $departmentIds = array_column($depts, 'departmentId');
 
-        ## 所有子部门
+        ## 当前部门 + 所有子部门
         $allDepts = $deptService->getWorkDepartmentsByParentPath(array_column($deptPaths, 'path'), ['id']);
+        $departmentIds = array_unique(array_merge($departmentIds, array_column($allDepts, 'id')));
+        if (empty($departmentIds)) {
+            return [];
+        }
 
         ## 部门下所有员工
         $employees = $container->get(WorkEmployeeDepartmentContract::class)->getWorkEmployeeDepartmentsByDepartmentIds(
-            array_column($allDepts, 'id'),
+            $departmentIds,
             ['id', 'employee_id']
         );
 
