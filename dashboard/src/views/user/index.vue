@@ -82,12 +82,29 @@
         @cancel="reset"
         title="基础信息">
         <a-form-model ref="ruleForm" :model="userData" :rules="rules" :label-col="{ span: 6 }" :wrapper-col="{ span: 16 }">
+          <a-form-model-item label="企业微信成员:" prop="employeeId">
+            <a-select
+              v-model="userData.employeeId"
+              showSearch
+              optionFilterProp="children"
+              placeholder="请选择已同步的企业微信成员"
+              :loading="employeeFetching"
+              @change="handleEmployeeChange">
+              <a-select-option
+                v-for="item in employeeList"
+                :key="item.employeeId"
+                :value="item.employeeId"
+                :disabled="item.logUserId && item.logUserId != userId">
+                {{ item.employeeName }}（{{ item.wxUserId }}）
+              </a-select-option>
+            </a-select>
+          </a-form-model-item>
           <a-form-model-item label="员工姓名:" prop="userName">
             <a-input v-model="userData.userName"></a-input>
           </a-form-model-item>
           <a-form-model-item label="手机号码：" prop="phone" style="position: relative;">
-            <a-input v-model="userData.phone" @blur="phoneSelect"></a-input>
-            <span style="position: absolute;left: 5px;top: 20px;color: #a9a9a9;">输入的手机号需与企业微信中员工的手机号一致</span>
+            <a-input v-model="userData.phone"></a-input>
+            <span style="position: absolute;left: 5px;top: 20px;color: #a9a9a9;">该手机号仅作为 MoChat 登录账号</span>
           </a-form-model-item>
           <a-form-model-item label="密码：" prop="password" v-if="addShowPopup">
             <a-input v-model="userData.password" type="password"></a-input>
@@ -120,11 +137,11 @@
           </a-form-model-item>
           <div class="role-box">
             <a-form-model-item label="部门" >
-              <a-tooltip v-if="departmentList.length !== 0" v-for="item in departmentList" :key="item.workDepartmentId">
+              <a-tooltip v-if="departmentList.length !== 0" v-for="item in departmentList" :key="item.workDepartmentId || item.departmentId">
                 <template slot="title">
-                  {{ item.workDepartmentName }}
+                  {{ item.workDepartmentName || item.departmentName }}
                 </template>
-                <div class="name" >{{ item.workDepartmentName }}</div>
+                <div class="name" >{{ item.workDepartmentName || item.departmentName }}</div>
               </a-tooltip>
             </a-form-model-item>
             <a-form-model-item label="角色" prop="roleId">
@@ -171,8 +188,7 @@
 </template>
 
 <script>
-// eslint-disable-next-line no-unused-vars
-import { subManagementList, addSubManagement, getSubManagement, editSubManagement, changeStatus, selectByPhone, selectRole, passwordResetApi } from '@/api/user'
+import { subManagementList, addSubManagement, getSubManagement, editSubManagement, changeStatus, selectRole, passwordResetApi, selectEmployee } from '@/api/user'
 export default {
   data () {
     return {
@@ -229,6 +245,8 @@ export default {
         }
       ],
       tableData: [],
+      employeeList: [],
+      employeeFetching: false,
       userData: {
         gender: 1,
         status: 0
@@ -263,6 +281,7 @@ export default {
         userName: [
           { required: true, message: '请输入员工姓名', trigger: 'blur' }
         ],
+        employeeId: [{ required: true, message: '请选择企业微信成员', trigger: 'change' }],
         phone: [{ required: true, message: '请输入手机号', trigger: 'focus' }],
         password: [{ required: true, message: '密码不能为空', trigger: 'blur' }],
         confirmPass: [{ required: true, message: '请再次确认密码', trigger: 'blur' }],
@@ -278,6 +297,7 @@ export default {
   created () {
     this.getTableData()
     this.getSelectRole()
+    this.getEmployeeList()
   },
   methods: {
     // 取消按钮
@@ -320,6 +340,8 @@ export default {
     addPopupBtn () {
       this.modalVisible = true
       this.addShowPopup = true
+      this.userId = ''
+      this.getEmployeeList()
     },
     getTableData () {
       const params = {
@@ -363,18 +385,23 @@ export default {
         this.getTableData()
       })
     },
-    // input失去焦点
-    phoneSelect () {
-      if (!(/^1[3456789]\d{9}$/.test(this.userData.phone))) {
-        this.btnLoading = false
-        this.$message.warning('手机号格式错误')
-        return false
-      }
-      selectByPhone({
-        phone: this.userData.phone
-      }).then(res => {
-        this.departmentList = res.data
+    // 获取企业微信成员
+    getEmployeeList () {
+      this.employeeFetching = true
+      selectEmployee().then(res => {
+        this.employeeList = res.data
+      }).finally(() => {
+        this.employeeFetching = false
       })
+    },
+    handleEmployeeChange (employeeId) {
+      const employee = this.employeeList.find(item => item.employeeId === employeeId)
+      if (!employee) {
+        return
+      }
+      this.userData.userName = employee.employeeName
+      this.userData.employeeId = employee.employeeId
+      this.departmentList = employee.department || []
     },
     // 获取人员
     getSelectRole () {
@@ -402,6 +429,7 @@ export default {
             }
             editSubManagement({
               userId: this.userId,
+              employeeId: this.userData.employeeId,
               userName: this.userData.userName,
               phone: this.userData.phone,
               gender: this.userData.gender,
@@ -414,6 +442,7 @@ export default {
                 gender: 1,
                 status: 0
               }
+              this.userId = ''
               this.getTableData()
             }).catch((res) => {
               this.modalVisible = true
@@ -460,6 +489,7 @@ export default {
         gender: 1,
         status: 0
       }
+      this.userId = ''
       this.departmentList = []
       this.$refs.ruleForm.resetFields()
     },
@@ -472,11 +502,8 @@ export default {
         this.modalVisible = true
         this.userId = res.data.userId
         this.userData = res.data
-        selectByPhone({
-          phone: this.userData.phone
-        }).then(res => {
-          this.departmentList = res.data
-        })
+        this.getEmployeeList()
+        this.departmentList = res.data.department
       })
     },
     handleTableChange ({ current, pageSize }) {

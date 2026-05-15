@@ -102,20 +102,18 @@ class StoreLogic
     {
         ## 角色信息
         $roleId = $params['roleId'];
-        unset($params['roleId']);
+        $employeeId = (int) $params['employeeId'];
+        unset($params['roleId'], $params['employeeId']);
         $corpId = (int) $user['corpIds'][0];
-        ## 根据手机号
-        $employeeData = $this->employeeService->getWorkEmployeesByMobile($corpId, $params['phone'], ['id']);
+        ## 根据企业微信成员ID绑定子账户，不再依赖企微手机号返回值
+        $employeeData = $this->getBindableEmployee($corpId, $employeeId);
         ## 数据操作
         Db::beginTransaction();
         try {
             ## 插入用户
             $userId = $this->userService->createUser($params);
             ## 更新用户通讯录表
-            empty($employeeData) || $this->employeeService->updateWorkEmployeesCaseIds(array_map(static function ($item) use ($userId) {
-                $item['log_user_id'] = $userId;
-                return $item;
-            }, $employeeData));
+            $this->employeeService->updateWorkEmployeeById((int) $employeeData['id'], ['log_user_id' => $userId]);
             ## 插入用户角色
             empty($roleId) || $this->rbacUserRoleService->createRbacUserRole([
                 'user_id' => $userId,
@@ -130,5 +128,18 @@ class StoreLogic
             $this->logger->error($e->getTraceAsString());
             throw new CommonException(ErrorCode::SERVER_ERROR, '账户创建失败');
         }
+    }
+
+    private function getBindableEmployee(int $corpId, int $employeeId): array
+    {
+        $employee = $this->employeeService->getWorkEmployeeById($employeeId, ['id', 'corp_id', 'log_user_id', 'wx_user_id']);
+        if (empty($employee) || (int) $employee['corpId'] !== $corpId || empty($employee['wxUserId'])) {
+            throw new CommonException(ErrorCode::INVALID_PARAMS, '请选择当前企业下有效的企业微信成员');
+        }
+        if (! empty($employee['logUserId'])) {
+            throw new CommonException(ErrorCode::INVALID_PARAMS, '该企业微信成员已绑定其他子账户');
+        }
+
+        return $employee;
     }
 }

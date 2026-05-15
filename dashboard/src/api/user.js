@@ -63,6 +63,15 @@ export function selectByPhone (params) {
   })
 }
 
+// 企业微信成员下拉列表
+export function selectEmployee (params) {
+  return request({
+    url: '/workDepartment/selectEmployee',
+    method: 'get',
+    params: params
+  })
+}
+
 // 角色列表
 export function selectRole (params) {
   return request({

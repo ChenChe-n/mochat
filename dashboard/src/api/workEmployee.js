@@ -26,3 +26,12 @@ export function syncTime (params) {
     data: params
   })
 }
+
+// 删除企业成员
+export function deleteEmployee (params) {
+  return request({
+    url: '/workEmployee/delete',
+    method: 'delete',
+    params: params
+  })
+}

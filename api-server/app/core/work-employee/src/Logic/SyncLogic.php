@@ -119,6 +119,7 @@ class SyncLogic
             }
             //成员基础信息
             $employeeData = $this->getEmployeeData($corpId);
+            $logUserIds = $employeeData['logUserIds'];
             //成员部门关系
             $employeeDepartment = $this->getEmployeeDepartment($employeeData['employee'], $employeeData['wxEmployee']);
             //处理部门关系数据
@@ -145,7 +146,8 @@ class SyncLogic
                     $updateEmployee,
                     $userIds,
                     $phones,
-                    $fileQueueData
+                    $fileQueueData,
+                    $logUserIds
                 );
             }
             if (! empty($createEmployeeData[$corpId])) {
@@ -220,7 +222,8 @@ class SyncLogic
         &$updateEmployee,
         &$userIds,
         &$phones,
-        &$fileQueueData
+        &$fileQueueData,
+        array $logUserIds
     ) {
         //获取部门员工关联信息
         foreach ($userList['userlist'] as $k => $user) {
@@ -354,13 +357,16 @@ class SyncLogic
      */
     protected function getEmployeeData($corpId)
     {
-        $returnData = $wxEmployeeData = [];
+        $returnData = $wxEmployeeData = $logUserIds = [];
         //公司成员信息
-        $employeeData = $this->workEmployeeService->getWorkEmployeesByCorpId($corpId, ['id', 'wx_user_id', 'avatar', 'thumb_avatar','status']);
+        $employeeData = $this->workEmployeeService->getWorkEmployeesByCorpId($corpId, ['id', 'wx_user_id', 'avatar', 'thumb_avatar', 'status', 'log_user_id']);
         if (empty($employeeData)) {
-            return ['employee' => $returnData, 'wxEmployee' => $wxEmployeeData];
+            return ['employee' => $returnData, 'wxEmployee' => $wxEmployeeData, 'logUserIds' => $logUserIds];
         }
         foreach ($employeeData as $ek => $ev) {
+            if (! empty($ev['logUserId'])) {
+                $logUserIds[$corpId][$ev['wxUserId']] = $ev['logUserId'];
+            }
             $returnData[$ev['id']] = $wxEmployeeData[$ev['wxUserId']][0] = [
                 'id' => $ev['id'],
                 'wxUserId' => $ev['wxUserId'],
@@ -372,7 +378,7 @@ class SyncLogic
                 'status' => $ev['status'],
             ];
         }
-        return ['employee' => $returnData, 'wxEmployee' => $wxEmployeeData];
+        return ['employee' => $returnData, 'wxEmployee' => $wxEmployeeData, 'logUserIds' => $logUserIds];
     }
 
     /**

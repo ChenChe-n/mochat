@@ -102,6 +102,8 @@ class Show extends AbstractAction
         $data['userName'] = $data['name'];
         $data['roleId'] = $roleInfo['roleId'];
         $data['roleName'] = $roleInfo['roleName'];
+        $data['employee'] = $this->getEmployeeInfo((int) $data['id'], (int) user()['corpIds'][0]);
+        $data['employeeId'] = $data['employee']['employeeId'] ?? 0;
         $data['department'] = $this->getDepartmentList((int) $data['id'], (int) user()['corpIds'][0]);
         unset($data['id'], $data['name'], $data['position'], $data['loginTime'], $data['password'], $data['createdAt'], $data['updatedAt'], $data['deletedAt']);
 
@@ -177,5 +179,19 @@ class Show extends AbstractAction
                 'departmentName' => $department['name'],
             ];
         }, $departmentList);
+    }
+
+    private function getEmployeeInfo(int $userId, int $corpId): array
+    {
+        $employee = $this->workEmployeeService->getWorkEmployeeByCorpIdLogUserId($corpId, $userId, ['id', 'name', 'wx_user_id']);
+        if (empty($employee)) {
+            return [];
+        }
+
+        return [
+            'employeeId' => $employee['id'],
+            'employeeName' => $employee['name'],
+            'wxUserId' => $employee['wxUserId'],
+        ];
     }
 }

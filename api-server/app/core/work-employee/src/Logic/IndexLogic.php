@@ -158,7 +158,7 @@ class IndexLogic
         // 员工基础信息
         return $this->workEmployeeService->getWorkEmployeeList(
             $where,
-            ['id', 'name', 'thumb_avatar', 'status', 'contact_auth', 'wx_user_id', 'corp_id', 'gender'],
+            ['id', 'name', 'thumb_avatar', 'status', 'contact_auth', 'wx_user_id', 'corp_id', 'gender', 'log_user_id'],
             $options
         );
     }

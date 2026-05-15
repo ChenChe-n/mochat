@@ -22,6 +22,11 @@
             <a-icon v-if="record.gender === '男'" type="man" />
             <a-icon v-if="record.gender === '女'" type="woman" />
           </div>
+          <div slot="action" slot-scope="text, record">
+            <a-popconfirm title="确认删除该成员吗？" ok-text="确认" cancel-text="取消" @confirm="deleteEmployeeRow(record)">
+              <a-button type="link">删除</a-button>
+            </a-popconfirm>
+          </div>
         </a-table>
       </div>
       <a-drawer
@@ -62,7 +67,7 @@
 </template>
 
 <script>
-import { enterMembersList, syncTime, syncEmployee } from '@/api/workEmployee'
+import { enterMembersList, syncTime, syncEmployee, deleteEmployee } from '@/api/workEmployee'
 export default {
   data () {
     return {
@@ -119,6 +124,12 @@ export default {
           title: '删除/拉黑客户数',
           align: 'center',
           dataIndex: 'invalidContact'
+        },
+        {
+          title: '操作',
+          align: 'center',
+          dataIndex: 'action',
+          scopedSlots: { customRender: 'action' }
         }
       ],
       tableData: [],
@@ -166,6 +177,14 @@ export default {
       syncEmployee().then(res => {
         this.getTableData()
         this.$message.info('后台同步中,请稍等')
+      })
+    },
+    deleteEmployeeRow (record) {
+      deleteEmployee({
+        employeeId: record.id
+      }).then(() => {
+        this.$message.success('删除成功')
+        this.getTableData()
       })
     },
     onClose () {

@@ -105,7 +105,7 @@ class UpdateLogic
                 'created_at' => date('Y-m-d H:i:s'),
             ];
         }
-        unset($params['roleId'], $params['userId']);
+        unset($params['roleId'], $params['userId'], $params['employeeId']);
         ## 用户信息
         $data['updateUser'] = [
             'where' => ['id' => $userId],
@@ -132,17 +132,18 @@ class UpdateLogic
     {
         $userId = $sqlData['updateUser']['where']['id'];
         $corpId = (int) $user['corpIds'][0];
-        $employeeData = $this->employeeService->getWorkEmployeesByMobile($corpId, $params['phone'], ['id']);
+        $employeeData = $this->getBindableEmployee($corpId, (int) $params['employeeId'], (int) $userId);
         ## 数据操作
         Db::beginTransaction();
         try {
             ## 用户
             $this->userService->updateUserById($userId, $sqlData['updateUser']['data']);
             ## 员工通讯录
-            empty($employeeData) || $this->employeeService->updateWorkEmployeesCaseIds(array_map(static function ($item) use ($userId) {
-                $item['log_user_id'] = $userId;
-                return $item;
-            }, $employeeData));
+            $oldEmployee = $this->employeeService->getWorkEmployeeByCorpIdLogUserId($corpId, (int) $userId, ['id']);
+            if (! empty($oldEmployee) && (int) $oldEmployee['id'] !== (int) $employeeData['id']) {
+                $this->employeeService->updateWorkEmployeeById((int) $oldEmployee['id'], ['log_user_id' => 0]);
+            }
+            $this->employeeService->updateWorkEmployeeById((int) $employeeData['id'], ['log_user_id' => $userId]);
             ## 旧角色
             isset($sqlData['deleteRole']) && $this->rbacUserRoleService->deleteRbacUserRole($sqlData['deleteRole']['roleId']);
             ## 新角色
@@ -155,5 +156,18 @@ class UpdateLogic
             $this->logger->error($e->getTraceAsString());
             throw new CommonException(ErrorCode::SERVER_ERROR, '账户更新失败');
         }
+    }
+
+    private function getBindableEmployee(int $corpId, int $employeeId, int $userId): array
+    {
+        $employee = $this->employeeService->getWorkEmployeeById($employeeId, ['id', 'corp_id', 'log_user_id', 'wx_user_id']);
+        if (empty($employee) || (int) $employee['corpId'] !== $corpId || empty($employee['wxUserId'])) {
+            throw new CommonException(ErrorCode::INVALID_PARAMS, '请选择当前企业下有效的企业微信成员');
+        }
+        if (! empty($employee['logUserId']) && (int) $employee['logUserId'] !== $userId) {
+            throw new CommonException(ErrorCode::INVALID_PARAMS, '该企业微信成员已绑定其他子账户');
+        }
+
+        return $employee;
     }
 }

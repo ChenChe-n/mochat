@@ -55,6 +55,7 @@ class Store extends AbstractAction
         $params = [
             'name' => $this->request->input('userName'),
             'phone' => $this->request->input('phone'),
+            'employeeId' => $this->request->input('employeeId'),
             'gender' => $this->request->input('gender'),
             'status' => $this->request->input('status'),
             'roleId' => $this->request->input('roleId', 0),
@@ -77,6 +78,7 @@ class Store extends AbstractAction
         return [
             'userName' => 'required | string | min:1 | bail',
             'phone' => 'required | string | size:11 | bail',
+            'employeeId' => 'required | integer | min:1 | bail',
             'gender' => 'required | integer | in:1,2, | bail',
             'status' => 'required | integer | in:0,1,2, | bail',
             'password' => 'required',
@@ -96,6 +98,9 @@ class Store extends AbstractAction
             'phone.required' => '手机号码 必填',
             'phone.string' => '手机号码 必需为字符串',
             'phone.size' => '手机号码 字符串长度为固定值：11',
+            'employeeId.required' => '企业微信成员 必填',
+            'employeeId.integer' => '企业微信成员 必需为整数',
+            'employeeId.min' => '企业微信成员 不可小于1',
             'gender.required' => '性别 必填',
             'gender.integer' => '性别 必需为整数',
             'gender.in' => '性别 值必须在列表内：[1,2]',
