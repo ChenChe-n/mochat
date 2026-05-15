@@ -276,7 +276,8 @@ export default {
         total: 0,
         current: 1,
         pageSize: 10,
-        showSizeChanger: true
+        showSizeChanger: true,
+        showQuickJumper: true
       },
       // 群聊表格Cloumn
       groupColumns: [
@@ -355,6 +356,7 @@ export default {
     }
   },
   created () {
+    this.restorePaginationFromRoute()
     this.getTableData()
     this.getGroupChatList()
     this.getCustomersSource()
@@ -363,6 +365,28 @@ export default {
     this.getEmployeeList()
   },
   methods: {
+    restorePaginationFromRoute () {
+      const { page, perPage } = this.$route.query
+      const current = Number(page)
+      const pageSize = Number(perPage)
+      if (Number.isInteger(current) && current > 0) {
+        this.pagination.current = current
+      }
+      if (Number.isInteger(pageSize) && pageSize > 0) {
+        this.pagination.pageSize = pageSize
+      }
+    },
+    syncPaginationToRoute () {
+      const query = {
+        ...this.$route.query,
+        page: String(this.pagination.current),
+        perPage: String(this.pagination.pageSize)
+      }
+      this.$router.replace({
+        path: this.$route.path,
+        query
+      }).catch(() => {})
+    },
     getEmployeeList () {
       departmentList().then((res) => {
         console.log(res)
@@ -375,6 +399,7 @@ export default {
       )
     },
     getTableData () {
+      this.syncPaginationToRoute()
       const params = {
         keyWords: this.screenData.keyWords,
         remark: this.screenData.remark,
@@ -488,6 +513,7 @@ export default {
         addWay: '全部',
         fieldId: 0
       }
+      this.pagination.current = 1
       this.timeValue = []
       this.groupNum = 3
       this.employeeIdList = ''
