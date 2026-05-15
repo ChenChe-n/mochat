@@ -197,4 +197,17 @@ class UserService extends AbstractService implements UserContract
             ->where('phone', $phone)
             ->update(['status' => $status]);
     }
+
+    /**
+     * 修改账户状态 - 根据ID.
+     * @param int $id 用户ID
+     * @param int $status 账户状态
+     * @return int 修改条数
+     */
+    public function updateUserStatusByUserId(int $id, int $status): int
+    {
+        return $this->model::query()
+            ->where('id', $id)
+            ->update(['status' => $status]);
+    }
 }

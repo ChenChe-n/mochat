@@ -12,6 +12,8 @@ namespace MoChat\App\WorkEmployee\EventHandler;
 
 use Hyperf\Contract\StdoutLoggerInterface;
 use Hyperf\DbConnection\Db;
+use Hyperf\Redis\Redis;
+use Hyperf\Utils\ApplicationContext;
 use MoChat\App\Corp\Contract\CorpContract;
 use MoChat\App\User\Contract\UserContract;
 use MoChat\App\WorkDepartment\Contract\WorkDepartmentContract;
@@ -79,6 +81,12 @@ class EmployeeUpdateHandler extends AbstractEventHandler
             return 'success';
         }
         $employee = end($employeeData);
+        $oldLogUserId = (int) ($employee['logUserId'] ?? 0);
+        $nextWxUserId = $this->message['UserID'];
+        if (! empty($this->message['NewUserID']) && $this->message['NewUserID'] !== $this->message['UserID']) {
+            $nextWxUserId = $this->message['NewUserID'];
+            $this->message['UserID'] = $nextWxUserId;
+        }
         //成员和部门关系
         $this->workEmployeeDepartmentService = make(WorkEmployeeDepartmentContract::class);
         //部门
@@ -148,9 +156,12 @@ class EmployeeUpdateHandler extends AbstractEventHandler
             if (! empty($updateEmployee)) {
                 $this->workEmployeeService->updateWorkEmployeeById($employee['id'], $updateEmployee);
                 // 员工离职子账户禁用
-                if ($updateEmployee['status'] === 2 && ! empty($updateEmployee['mobile'])) {
+                if ($updateEmployee['status'] === 2 && $oldLogUserId > 0) {
                     $this->userService = make(UserContract::class);
-                    $this->userService->updateUserStatusByPhone($updateEmployee['mobile'], 2);
+                    $this->userService->updateUserStatusByUserId($oldLogUserId, 2);
+                }
+                if ($oldLogUserId > 0) {
+                    ApplicationContext::getContainer()->get(Redis::class)->del('mc:user.' . $oldLogUserId);
                 }
             }
             // 添加成员部门关系
@@ -236,13 +247,9 @@ class EmployeeUpdateHandler extends AbstractEventHandler
 //            ];
 //            file_upload_queue($ossData);
 //        }
-        $logUserId = $employee['logUserId'];
-        if (! empty($this->message['Mobile']) && $this->message['Mobile'] != $employee['mobile']) {
-            //子账户关联
-            $logUserId = $this->getUserData($this->message['Mobile']);
-        }
         return [
             'id' => $employee['id'],
+            'wx_user_id' => $nextWxUserId,
             'name' => ! empty($this->message['Name']) ? $this->message['Name'] : $employee['name'],
             'mobile' => ! empty($this->message['Mobile']) ? $this->message['Mobile'] : $employee['mobile'],
             'position' => ! empty($this->message['Position']) ? $this->message['Position'] : $employee['position'],
@@ -255,25 +262,8 @@ class EmployeeUpdateHandler extends AbstractEventHandler
             'extattr' => ! empty($this->message['ExtAttr']) ? json_encode($this->message['ExtAttr']) : $employee['extattr'],
             'status' => ! empty($this->message['Status']) ? $this->message['Status'] : $employee['status'],
             'address' => ! empty($this->message['Address']) ? $this->message['Address'] : $employee['address'],
-            'log_user_id' => $logUserId,
+            'log_user_id' => $employee['logUserId'],
             'updated_at' => date('Y-m-d H:i:s'),
         ];
-    }
-
-    /**
-     * 获取子账户信息.
-     * @return int
-     */
-    protected function getUserData(string $phone)
-    {
-        if (! empty($phone)) {
-            $this->userService = make(UserContract::class);
-            $userData = $this->userService->getUserByPhone($phone, ['id']);
-            if (! empty($userData->id)) {
-                return $userData->id;
-            }
-            return 0;
-        }
-        return 0;
     }
 }

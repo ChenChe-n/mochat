@@ -134,4 +134,12 @@ interface UserContract
      * @return int 修改条数
      */
     public function updateUserStatusByPhone(string $phone, int $status): int;
+
+    /**
+     * 修改账户状态 - 根据ID.
+     * @param int $id 用户ID
+     * @param int $status 账户状态
+     * @return int 修改条数
+     */
+    public function updateUserStatusByUserId(int $id, int $status): int;
 }

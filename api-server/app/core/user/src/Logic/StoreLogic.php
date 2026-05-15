@@ -13,6 +13,8 @@ namespace MoChat\App\User\Logic;
 use Hyperf\Contract\StdoutLoggerInterface;
 use Hyperf\DbConnection\Db;
 use Hyperf\Di\Annotation\Inject;
+use Hyperf\Redis\Redis;
+use Hyperf\Utils\ApplicationContext;
 use MoChat\App\Rbac\Contract\RbacUserRoleContract;
 use MoChat\App\User\Contract\UserContract;
 use MoChat\App\WorkEmployee\Contract\WorkEmployeeContract;
@@ -114,6 +116,7 @@ class StoreLogic
             $userId = $this->userService->createUser($params);
             ## 更新用户通讯录表
             $this->employeeService->updateWorkEmployeeById((int) $employeeData['id'], ['log_user_id' => $userId]);
+            $this->refreshUserCorpCache($userId, $corpId, (int) $employeeData['id']);
             ## 插入用户角色
             empty($roleId) || $this->rbacUserRoleService->createRbacUserRole([
                 'user_id' => $userId,
@@ -141,5 +144,11 @@ class StoreLogic
         }
 
         return $employee;
+    }
+
+    private function refreshUserCorpCache(int $userId, int $corpId, int $employeeId): void
+    {
+        $redis = ApplicationContext::getContainer()->get(Redis::class);
+        $redis->set('mc:user.' . $userId, $corpId . '-' . $employeeId);
     }
 }

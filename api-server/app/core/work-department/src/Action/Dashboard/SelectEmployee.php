@@ -16,6 +16,7 @@ use Hyperf\HttpServer\Annotation\Middleware;
 use Hyperf\HttpServer\Annotation\Middlewares;
 use Hyperf\HttpServer\Annotation\RequestMapping;
 use MoChat\App\Common\Middleware\DashboardAuthMiddleware;
+use MoChat\App\Rbac\Middleware\PermissionMiddleware;
 use MoChat\App\WorkDepartment\Contract\WorkDepartmentContract;
 use MoChat\App\WorkEmployee\Contract\WorkEmployeeContract;
 use MoChat\App\WorkEmployee\Contract\WorkEmployeeDepartmentContract;
@@ -52,7 +53,8 @@ class SelectEmployee extends AbstractAction
 
     /**
      * @Middlewares({
-     *     @Middleware(DashboardAuthMiddleware::class)
+     *     @Middleware(DashboardAuthMiddleware::class),
+     *     @Middleware(PermissionMiddleware::class)
      * })
      * @RequestMapping(path="/dashboard/workDepartment/selectEmployee", methods="get")
      * @return array 返回数组
@@ -69,10 +71,19 @@ class SelectEmployee extends AbstractAction
         ## 获取当前企业已同步的企业微信成员
         $employeeList = $this->workEmployeeService->getWorkEmployeesByCorpIdWxUserIdNotNull(
             [$corpId],
-            ['id', 'name', 'wx_user_id', 'log_user_id', 'mobile', 'status']
+            ['id', 'name', 'wx_user_id', 'log_user_id', 'status']
         );
         if (empty($employeeList)) {
             return [];
+        }
+        if (! empty($user['dataPermission'])) {
+            $deptEmployeeIds = $user['deptEmployeeIds'] ?? [];
+            $employeeList = array_filter($employeeList, static function ($employee) use ($deptEmployeeIds) {
+                return in_array($employee['id'], $deptEmployeeIds, true);
+            });
+            if (empty($employeeList)) {
+                return [];
+            }
         }
         if ($name !== '') {
             $employeeList = array_filter($employeeList, static function ($employee) use ($name) {
@@ -87,7 +98,6 @@ class SelectEmployee extends AbstractAction
                 'employeeName' => $employee['name'],
                 'wxUserId' => $employee['wxUserId'],
                 'logUserId' => $employee['logUserId'],
-                'phone' => $employee['mobile'],
                 'status' => $employee['status'],
                 'department' => $employeeDepartments[$employee['id']] ?? [],
             ];

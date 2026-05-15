@@ -12,6 +12,8 @@ namespace MoChat\App\WorkEmployee\EventHandler;
 
 use Hyperf\Contract\StdoutLoggerInterface;
 use Hyperf\DbConnection\Db;
+use Hyperf\Redis\Redis;
+use Hyperf\Utils\ApplicationContext;
 use MoChat\App\Corp\Contract\CorpContract;
 use MoChat\App\User\Contract\UserContract;
 use MoChat\App\WorkContact\Contract\WorkContactEmployeeContract;
@@ -78,7 +80,7 @@ class EmployeeMoveHandler extends AbstractEventHandler
             $this->logger->error('EmployeeMoveHandler->process同步删除成员corp不能为空');
             return 'success';
         }
-        $employeeData = $this->workEmployeeService->getWorkEmployeeByCorpIdWxUserId((string) $corpData['id'], (string) $this->message['UserID'], ['id', 'mobile']);
+        $employeeData = $this->workEmployeeService->getWorkEmployeeByCorpIdWxUserId((string) $corpData['id'], (string) $this->message['UserID'], ['id', 'mobile', 'log_user_id']);
         if (empty($employeeData)) {
             $this->logger->error('EmployeeMoveHandler->process同步删除成员employee不能为空');
             return 'success';
@@ -110,9 +112,10 @@ class EmployeeMoveHandler extends AbstractEventHandler
             $this->workEmployeeService->deleteWorkEmployee($employeeId);
             // 员工离职子账户禁用
             foreach ($employeeData as $item) {
-                if (! empty($item['mobile'])) {
+                if (! empty($item['logUserId'])) {
                     $this->userService = make(UserContract::class);
-                    $this->userService->updateUserStatusByPhone($item['mobile'], 2);
+                    $this->userService->updateUserStatusByUserId((int) $item['logUserId'], 2);
+                    ApplicationContext::getContainer()->get(Redis::class)->del('mc:user.' . (int) $item['logUserId']);
                 }
             }
 

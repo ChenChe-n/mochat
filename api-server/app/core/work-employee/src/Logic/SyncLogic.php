@@ -15,14 +15,11 @@ use Hyperf\DbConnection\Db;
 use MoChat\App\Corp\Constants\WorkUpdateTime\Type;
 use MoChat\App\Corp\Contract\CorpContract;
 use MoChat\App\Corp\Contract\WorkUpdateTimeContract;
-use MoChat\App\User\Contract\UserContract;
 use MoChat\App\WorkDepartment\Contract\WorkDepartmentContract;
 use MoChat\App\WorkEmployee\Constants\ContactAuth;
 use MoChat\App\WorkEmployee\Contract\WorkEmployeeContract;
 use MoChat\App\WorkEmployee\Contract\WorkEmployeeDepartmentContract;
 use MoChat\Framework\WeWork\WeWork;
-use Qbhy\HyperfAuth\AuthManager;
-use Qbhy\SimpleJwt\JWTManager;
 
 /**
  * 成员管理-同步.
@@ -47,11 +44,6 @@ class SyncLogic
     protected $workEmployeeDepartmentService;
 
     /**
-     * @var UserContract
-     */
-    protected $userService;
-
-    /**
      * @var StdoutLoggerInterface
      */
     protected $logger;
@@ -71,11 +63,6 @@ class SyncLogic
      */
     protected $workUpdateTimeService;
 
-    /**
-     * @var AuthManager
-     */
-    protected $authManager;
-
     public function handle(array $corpIds): bool
     {
         $this->logger = make(StdoutLoggerInterface::class);
@@ -88,7 +75,6 @@ class SyncLogic
         $this->workDepartmentService = make(WorkDepartmentContract::class);
         $this->workEmployeeDepartmentService = make(WorkEmployeeDepartmentContract::class);
         $this->workUpdateTimeService = make(WorkUpdateTimeContract::class);
-        $this->authManager = make(AuthManager::class);
         //处理成员
         $this->dealEmployee($corpIds);
         //同步时间
@@ -106,9 +92,8 @@ class SyncLogic
     {
         //成员基础信息
         $corpData = $this->getCorpData($corpIds);
-        $createEmployeeData = $updateEmployeeDepartment = $createEmployeeDepartmentData = $userIds = $updateEmployee = $createData = $fileQueueData = $phones = [];
+        $createEmployeeData = $updateEmployeeDepartment = $createEmployeeDepartmentData = $userIds = $updateEmployee = $createData = $fileQueueData = [];
         foreach ($corpData as $corpId => $cdv) {
-            $tenantId = (int) $cdv['tenant_id'];
             unset($cdv['tenant_id']);
             $employeeData = $departments = $userList = $employeeDepartment = $employee = [];
             //公司下的所有部门
@@ -132,9 +117,6 @@ class SyncLogic
                 if (! empty($userList['errcode']) || empty($userList['userlist'])) {
                     continue;
                 }
-                // 处理员工子账户信息
-                $this->createEmployeeAccount($corpId, $userList['userlist'], $departments);
-
                 $this->handleSyncData(
                     $corpId,
                     $userList,
@@ -145,14 +127,12 @@ class SyncLogic
                     $createEmployeeData,
                     $updateEmployee,
                     $userIds,
-                    $phones,
                     $fileQueueData,
                     $logUserIds
                 );
             }
             if (! empty($createEmployeeData[$corpId])) {
-                //根据手机号查询子账户信息
-                $createData[$corpId] = $this->getUserData($tenantId, $phones, $createEmployeeData[$corpId]);
+                $createData[$corpId] = $createEmployeeData[$corpId];
             }
             if (! empty($createData[$corpId])) {
                 //外部联系人权限
@@ -221,7 +201,6 @@ class SyncLogic
         &$createEmployeeData,
         &$updateEmployee,
         &$userIds,
-        &$phones,
         &$fileQueueData,
         array $logUserIds
     ) {
@@ -268,9 +247,6 @@ class SyncLogic
             } else {
                 //新增成员信息
                 if (empty($createEmployeeData[$corpId][$user['userid']])) {
-                    if (! empty($user['mobile'])) {
-                        $phones[$user['mobile']] = $user['mobile'];
-                    }
                     //头像
 //                    $avatar = $this->addFileQueueData($user['avatar'], 'avatar', $fileQueueData);
                     //头像缩图
@@ -465,34 +441,6 @@ class SyncLogic
     }
 
     /**
-     * 获取子账户信息.
-     * @return array
-     */
-    protected function getUserData(int $tenantId, array $phones = [], array $employee = [])
-    {
-        $this->userService = make(UserContract::class);
-        $userData = $this->userService->getUsersByPhone($phones, ['id', 'phone', 'tenant_id']);
-        $user = [];
-        if (! empty($userData)) {
-            foreach ($userData as $uk => $uv) {
-                $user[$uv['phone']] = $uv['id'];
-            }
-            foreach ($employee as $ek => $ev) {
-                if (empty($ev['mobile'])) {
-                    continue;
-                }
-
-                if ($tenantId !== (int) $uv['tenantId']) {
-                    continue;
-                }
-
-                $employee[$ek]['log_user_id'] = ! empty($user[$ev['mobile']]) ? $user[$ev['mobile']] : 0;
-            }
-        }
-        return $employee;
-    }
-
-    /**
      * 获取联系人配置权限.
      * @throws \EasyWeChat\Kernel\Exceptions\InvalidConfigException
      * @return array
@@ -509,67 +457,6 @@ class SyncLogic
             }
         }
         return $createEmployeeData;
-    }
-
-    /**
-     * 创建员工子账号.
-     * @return bool
-     */
-    protected function createEmployeeAccount(int $corpId, array $userList, array $departments)
-    {
-        if (empty($userList)) {
-            return true;
-        }
-        $this->userService = make(UserContract::class);
-        $this->corpService = make(CorpContract::class);
-        ## 生成初始密码
-        $guard = $this->authManager->guard('jwt');
-        /** @var JWTManager $jwt */
-        $jwt = $guard->getJwtManager();
-        $password = $jwt->getEncrypter()->signature(substr(md5(mt_rand(0, 32) . '0905' . md5((string) mt_rand(0, 32)) . '0123'), 10, 6));
-        // 租户id
-        $tenantId = $this->corpService->getCorpById($corpId, ['tenant_id']);
-        if (! empty($tenantId)) {
-            $createEmployeeAccountData = array_chunk($userList, 100);
-            foreach ($createEmployeeAccountData as $user) {
-                //子账号信息
-                $data = [];
-                foreach ($user as $item) {
-                    $phone = $item['mobile'] ?? '';
-                    if (empty($phone)) {
-                        continue;
-                    }
-                    //查询账号是否已存在
-                    $userInfo = $this->userService->getUserByPhone($phone, ['id']);
-                    if (empty($userInfo)) {
-                        $data[] = [
-                            'phone' => $phone,
-                            'password' => $password,
-                            'name' => $item['name'] ?? '',
-                            'gender' => $item['gender'] ?? 0,
-                            'department' => ! empty($departments[$item['main_department']]['id']) ? $departments[$item['main_department']]['id'] : 0,
-                            'position' => $item['position'] ?? '',
-                            'tenant_id' => $tenantId['tenantId'],
-                            'created_at' => date('Y-m-d H:i:s'),
-                        ];
-                    }
-                }
-                if (! empty($data)) {
-                    //开启事务
-                    Db::beginTransaction();
-                    try {
-                        //创建子账户
-                        $this->userService->createUsers($data);
-                        Db::commit();
-                    } catch (\Throwable $e) {
-                        Db::rollBack();
-                        $this->logger->error(sprintf('%s [%s] %s', 'EmployeeStoreHandler->process成员新增子账户异常', date('Y-m-d H:i:s'), $e->getMessage()));
-                    }
-                }
-            }
-        }
-
-        return true;
     }
 
     /**

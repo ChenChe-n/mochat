@@ -54,15 +54,6 @@ export function changeStatus (params) {
   })
 }
 
-// 根据手机号匹配成员部门
-export function selectByPhone (params) {
-  return request({
-    url: '/workDepartment/selectByPhone',
-    method: 'get',
-    params: params
-  })
-}
-
 // 企业微信成员下拉列表
 export function selectEmployee (params) {
   return request({
