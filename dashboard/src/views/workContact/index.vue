@@ -171,7 +171,7 @@
           @change="handleTableChange">
           <div slot="news" slot-scope="text, record">
             <div class="news">
-              <img :src="record.avatar"/>
+              <img :src="record.avatar" style="width: 40px; height: 40px; object-fit: cover; flex: 0 0 40px; border-radius: 4px; display: block;" />
               <span class="name">
                 {{ record.name }}
               </span>
@@ -555,12 +555,14 @@ export default {
   }
   .news {
     width: 100%;
-    /*display: flex;*/
-    justify-content: space-between;
+    display: flex;
+    justify-content: flex-start;
     align-items: center;
-    img {
-      width: 40px;
-      height: 40px;
+    gap: 12px;
+    .name {
+      flex: 1;
+      min-width: 0;
+      word-break: break-all;
     }
     .weixin {
       color: #86CE76
