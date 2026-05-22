@@ -53,17 +53,24 @@ class MoveLogic
      */
     public function handle(array $params)
     {
+        $corpId = (int) user()['corpIds'][0];
         $tagIds = explode(',', $params['tagId']);
 
         //查询标签对应的wx_contact_tag_id，标签名称,分组id
-        $tagInfo = $this->contactTagService->getWorkContactTagsById($tagIds);
-        if (empty($tagInfo)) {
+        $tagInfo = $this->contactTagService->getWorkContactTagsByCorpIdId($corpId, $tagIds);
+        if (count($tagInfo) !== count(array_unique(array_map('intval', $tagIds)))) {
             throw new CommonException(ErrorCode::SERVER_ERROR, '查询不到标签信息');
+        }
+        if ((int) $params['groupId'] !== 0) {
+            $targetGroup = $this->contactTagGroupService->getWorkContactTagGroupByCorpIdId($corpId, (int) $params['groupId'], ['id']);
+            if (empty($targetGroup)) {
+                throw new CommonException(ErrorCode::INVALID_PARAMS, '客户标签分组不存在');
+            }
         }
 
         $tagNames = array_column($tagInfo, 'name');
         //查询要移动的分组下是否已经有该标签名称
-        $groupTag = $this->contactTagService->getWorkContactTagsByNamesGroupId($tagNames, $params['groupId']);
+        $groupTag = $this->contactTagService->getWorkContactTagsByCorpIdNamesGroupId($corpId, $tagNames, (int) $params['groupId']);
         if (! empty($groupTag)) {
             throw new CommonException(ErrorCode::SERVER_ERROR, '该分组下已有相同标签');
         }
@@ -110,7 +117,7 @@ class MoveLogic
             unset($value);
 
             //查询要修改的分组是否有 wx_group_id
-            $groupInfo = $this->contactTagGroupService->getWorkContactTagGroupById((int) $params['groupId'], ['wx_group_id', 'group_name']);
+            $groupInfo = $this->contactTagGroupService->getWorkContactTagGroupByCorpIdId((int) user()['corpIds'][0], (int) $params['groupId'], ['wx_group_id', 'group_name']);
             //如果有 将该标签新增到该分组下
             if (! empty($groupInfo['wxGroupId'])) {
                 $addParams = [

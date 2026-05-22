@@ -29,6 +29,11 @@ interface WorkContactTagGroupContract
     public function getWorkContactTagGroupsById(array $ids, array $columns = ['*']): array;
 
     /**
+     * 查询单条 - 根据企业ID和ID.
+     */
+    public function getWorkContactTagGroupByCorpIdId(int $corpId, int $id, array $columns = ['*']): array;
+
+    /**
      * 多条分页.
      * @param array $where 查询条件
      * @param array|string[] $columns 查询字段

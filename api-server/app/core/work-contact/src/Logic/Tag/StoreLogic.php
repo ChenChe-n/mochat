@@ -53,6 +53,12 @@ class StoreLogic
         if (count($corpId) != 1) {
             throw new CommonException(ErrorCode::INVALID_PARAMS, '请先选择企业');
         }
+        if ((int) $params['groupId'] !== 0) {
+            $groupInfo = $this->contactTagGroupService->getWorkContactTagGroupByCorpIdId((int) $corpId[0], (int) $params['groupId'], ['id']);
+            if (empty($groupInfo)) {
+                throw new CommonException(ErrorCode::INVALID_PARAMS, '客户标签分组不存在');
+            }
+        }
 
         $data = [];
         $tag = [];
@@ -69,7 +75,7 @@ class StoreLogic
         }
         //查询该分组下是否已存在相同标签名称
         $info = $this->contactTagService
-            ->getWorkContactTagsByNamesGroupId($params['tagName'], $params['groupId']);
+            ->getWorkContactTagsByCorpIdNamesGroupId((int) $corpId[0], $params['tagName'], (int) $params['groupId']);
 
         if (! empty($info)) {
             throw new CommonException(ErrorCode::INVALID_PARAMS, '该分组下已存在相同标签名');
@@ -84,7 +90,7 @@ class StoreLogic
         //若不是未分组
         if ($params['groupId'] != 0) {
             //根据分组id查询微信分组id、分组名
-            $groupInfo = $this->contactTagGroupService->getWorkContactTagGroupById((int) $params['groupId'], ['wx_group_id', 'group_name']);
+            $groupInfo = $this->contactTagGroupService->getWorkContactTagGroupByCorpIdId((int) $corpId[0], (int) $params['groupId'], ['wx_group_id', 'group_name']);
             if (! empty($groupInfo['wxGroupId'])) {
                 $addParams = [
                     'group_id' => $groupInfo['wxGroupId'],

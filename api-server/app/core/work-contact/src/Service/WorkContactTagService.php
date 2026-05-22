@@ -44,6 +44,34 @@ class WorkContactTagService extends AbstractService implements WorkContactTagCon
         return $this->model->getAllById($ids, $columns);
     }
 
+    public function getWorkContactTagsByCorpIdId(int $corpId, array $ids, array $columns = ['*']): array
+    {
+        $res = $this->model::query()
+            ->where('corp_id', $corpId)
+            ->whereIn('id', $ids)
+            ->get($columns);
+
+        if (empty($res)) {
+            return [];
+        }
+
+        return $res->toArray();
+    }
+
+    public function getWorkContactTagByCorpIdId(int $corpId, int $id, array $columns = ['*']): array
+    {
+        $res = $this->model::query()
+            ->where('corp_id', $corpId)
+            ->where('id', $id)
+            ->first($columns);
+
+        if (empty($res)) {
+            return [];
+        }
+
+        return $res->toArray();
+    }
+
     /**
      * 多条分页.
      * @param array $where 查询条件
@@ -168,6 +196,21 @@ class WorkContactTagService extends AbstractService implements WorkContactTagCon
         return $res->toArray();
     }
 
+    public function getWorkContactTagsByCorpIdNamesGroupId(int $corpId, array $names, int $groupId, array $columns = ['*']): array
+    {
+        $res = $this->model::query()
+            ->where('corp_id', $corpId)
+            ->whereIn('name', $names)
+            ->where('contact_tag_group_id', $groupId)
+            ->get($columns);
+
+        if (empty($res)) {
+            return [];
+        }
+
+        return $res->toArray();
+    }
+
     /**
      * 查询多条 - 根据分组id.
      * @param array|string[] $columns 查询字段
@@ -176,6 +219,20 @@ class WorkContactTagService extends AbstractService implements WorkContactTagCon
     public function getWorkContactTagsByGroupIds(array $groupId, array $columns = ['*']): array
     {
         $res = $this->model::query()
+            ->whereIn('contact_tag_group_id', $groupId)
+            ->get($columns);
+
+        if (empty($res)) {
+            return [];
+        }
+
+        return $res->toArray();
+    }
+
+    public function getWorkContactTagsByCorpIdGroupIdsStrict(int $corpId, array $groupId, array $columns = ['*']): array
+    {
+        $res = $this->model::query()
+            ->where('corp_id', $corpId)
             ->whereIn('contact_tag_group_id', $groupId)
             ->get($columns);
 

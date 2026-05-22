@@ -16,6 +16,7 @@ use Hyperf\HttpServer\Annotation\Middleware;
 use Hyperf\HttpServer\Annotation\Middlewares;
 use Hyperf\HttpServer\Annotation\RequestMapping;
 use MoChat\App\Common\Middleware\DashboardAuthMiddleware;
+use MoChat\App\Rbac\Middleware\PermissionMiddleware;
 use MoChat\App\WorkContact\Contract\WorkContactTagGroupContract;
 use MoChat\Framework\Action\AbstractAction;
 use MoChat\Framework\Constants\ErrorCode;
@@ -40,7 +41,8 @@ class Store extends AbstractAction
 
     /**
      * @Middlewares({
-     *     @Middleware(DashboardAuthMiddleware::class)
+     *     @Middleware(DashboardAuthMiddleware::class),
+     *     @Middleware(PermissionMiddleware::class)
      * })
      * @RequestMapping(path="/dashboard/workContactTagGroup/store", methods="POST")
      */
@@ -64,7 +66,7 @@ class Store extends AbstractAction
 
         //查询是否已存在相同分组名称
         $info = $this->contactTagGroupService
-            ->getWorkContactTagGroupsByName($params['groupName']);
+            ->getWorkContactTagGroupByCorpIdName((int) $corpId[0], $params['groupName']);
 
         if (! empty($info)) {
             throw new CommonException(ErrorCode::INVALID_PARAMS, '已存在相同分组名');

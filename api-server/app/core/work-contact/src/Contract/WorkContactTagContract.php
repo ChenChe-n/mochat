@@ -29,6 +29,16 @@ interface WorkContactTagContract
     public function getWorkContactTagsById(array $ids, array $columns = ['*']): array;
 
     /**
+     * 查询多条 - 根据企业ID和ID.
+     */
+    public function getWorkContactTagsByCorpIdId(int $corpId, array $ids, array $columns = ['*']): array;
+
+    /**
+     * 查询单条 - 根据企业ID和ID.
+     */
+    public function getWorkContactTagByCorpIdId(int $corpId, int $id, array $columns = ['*']): array;
+
+    /**
      * 多条分页.
      * @param array $where 查询条件
      * @param array|string[] $columns 查询字段
@@ -104,12 +114,22 @@ interface WorkContactTagContract
     public function getWorkContactTagsByNamesGroupId(array $names, $groupId, array $columns = ['*']): array;
 
     /**
+     * 查询多条 - 根据企业ID、多个标签名称和分组id.
+     */
+    public function getWorkContactTagsByCorpIdNamesGroupId(int $corpId, array $names, int $groupId, array $columns = ['*']): array;
+
+    /**
      * 查询多条 - 根据分组id.
      * @param array $groupId 分组id
      * @param array|string[] $columns 查询字段
      * @return array 数组
      */
     public function getWorkContactTagsByGroupIds(array $groupId, array $columns = ['*']): array;
+
+    /**
+     * 查询多条 - 根据企业ID和分组id.
+     */
+    public function getWorkContactTagsByCorpIdGroupIdsStrict(int $corpId, array $groupId, array $columns = ['*']): array;
 
     /**
      * 修改单条 - 根据标签名称.

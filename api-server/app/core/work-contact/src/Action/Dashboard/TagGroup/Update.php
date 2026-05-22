@@ -16,6 +16,7 @@ use Hyperf\HttpServer\Annotation\Middleware;
 use Hyperf\HttpServer\Annotation\Middlewares;
 use Hyperf\HttpServer\Annotation\RequestMapping;
 use MoChat\App\Common\Middleware\DashboardAuthMiddleware;
+use MoChat\App\Rbac\Middleware\PermissionMiddleware;
 use MoChat\App\WorkContact\Contract\WorkContactTagGroupContract;
 use MoChat\Framework\Action\AbstractAction;
 use MoChat\Framework\Constants\ErrorCode;
@@ -40,7 +41,8 @@ class Update extends AbstractAction
 
     /**
      * @Middlewares({
-     *     @Middleware(DashboardAuthMiddleware::class)
+     *     @Middleware(DashboardAuthMiddleware::class),
+     *     @Middleware(PermissionMiddleware::class)
      * })
      * @RequestMapping(path="/dashboard/workContactTagGroup/update", methods="PUT")
      */
@@ -53,16 +55,17 @@ class Update extends AbstractAction
 
         //验证参数
         $this->validated($params);
+        $group = $this->contactTagGroupService->getWorkContactTagGroupByCorpIdId((int) user()['corpIds'][0], (int) $params['groupId'], ['id']);
+        if (empty($group)) {
+            throw new CommonException(ErrorCode::INVALID_PARAMS, '客户标签分组不存在');
+        }
 
-        //若修改了信息做校验
-        if ($params['isUpdate'] == 1) {
-            //查询是否已存在相同分组名称
-            $info = $this->contactTagGroupService
-                ->getWorkContactTagGroupsByName($params['groupName']);
+        //查询是否已存在相同分组名称
+        $info = $this->contactTagGroupService
+            ->getWorkContactTagGroupByCorpIdName((int) user()['corpIds'][0], $params['groupName'], ['id']);
 
-            if (! empty($info)) {
-                throw new CommonException(ErrorCode::SERVER_ERROR, '已存在相同分组名');
-            }
+        if (! empty($info) && (int) $info['id'] !== (int) $params['groupId']) {
+            throw new CommonException(ErrorCode::SERVER_ERROR, '已存在相同分组名');
         }
 
         $res = $this->contactTagGroupService

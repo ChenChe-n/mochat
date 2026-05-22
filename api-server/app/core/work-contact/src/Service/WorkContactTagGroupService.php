@@ -43,6 +43,20 @@ class WorkContactTagGroupService extends AbstractService implements WorkContactT
         return $this->model->getAllById($ids, $columns);
     }
 
+    public function getWorkContactTagGroupByCorpIdId(int $corpId, int $id, array $columns = ['*']): array
+    {
+        $res = $this->model::query()
+            ->where('corp_id', $corpId)
+            ->where('id', $id)
+            ->first($columns);
+
+        if (empty($res)) {
+            return [];
+        }
+
+        return $res->toArray();
+    }
+
     /**
      * 多条分页.
      * @param array $where 查询条件

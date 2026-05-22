@@ -16,6 +16,7 @@ use Hyperf\HttpServer\Annotation\Middleware;
 use Hyperf\HttpServer\Annotation\Middlewares;
 use Hyperf\HttpServer\Annotation\RequestMapping;
 use MoChat\App\Common\Middleware\DashboardAuthMiddleware;
+use MoChat\App\Rbac\Middleware\PermissionMiddleware;
 use MoChat\App\WorkContact\Contract\WorkContactTagGroupContract;
 use MoChat\Framework\Action\AbstractAction;
 use MoChat\Framework\Request\ValidateSceneTrait;
@@ -38,7 +39,8 @@ class Detail extends AbstractAction
 
     /**
      * @Middlewares({
-     *     @Middleware(DashboardAuthMiddleware::class)
+     *     @Middleware(DashboardAuthMiddleware::class),
+     *     @Middleware(PermissionMiddleware::class)
      * })
      * @RequestMapping(path="/dashboard/workContactTagGroup/detail", methods="GET")
      */
@@ -50,7 +52,7 @@ class Detail extends AbstractAction
         $this->validated($params);
 
         $res = $this->contactTagGroupService
-            ->getWorkContactTagGroupById((int) $params['groupId'], ['id', 'group_name']);
+            ->getWorkContactTagGroupByCorpIdId((int) user()['corpIds'][0], (int) $params['groupId'], ['id', 'group_name']);
 
         if (empty($res)) {
             return [];

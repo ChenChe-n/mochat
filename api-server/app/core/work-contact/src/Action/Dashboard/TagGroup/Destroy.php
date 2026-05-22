@@ -17,6 +17,7 @@ use Hyperf\HttpServer\Annotation\Middleware;
 use Hyperf\HttpServer\Annotation\Middlewares;
 use Hyperf\HttpServer\Annotation\RequestMapping;
 use MoChat\App\Common\Middleware\DashboardAuthMiddleware;
+use MoChat\App\Rbac\Middleware\PermissionMiddleware;
 use MoChat\App\WorkContact\Contract\WorkContactTagContract;
 use MoChat\App\WorkContact\Contract\WorkContactTagGroupContract;
 use MoChat\App\WorkContact\Contract\WorkContactTagPivotContract;
@@ -61,7 +62,8 @@ class Destroy extends AbstractAction
 
     /**
      * @Middlewares({
-     *     @Middleware(DashboardAuthMiddleware::class)
+     *     @Middleware(DashboardAuthMiddleware::class),
+     *     @Middleware(PermissionMiddleware::class)
      * })
      * @RequestMapping(path="/dashboard/workContactTagGroup/destroy", methods="DELETE")
      */
@@ -73,7 +75,10 @@ class Destroy extends AbstractAction
         $this->validated($params);
 
         //查询该分组的wx_group_id
-        $groupInfo = $this->contactTagGroupService->getWorkContactTagGroupById((int) $params['groupId'], ['wx_group_id']);
+        $groupInfo = $this->contactTagGroupService->getWorkContactTagGroupByCorpIdId((int) user()['corpIds'][0], (int) $params['groupId'], ['wx_group_id']);
+        if (empty($groupInfo)) {
+            throw new CommonException(ErrorCode::INVALID_PARAMS, '客户标签分组不存在');
+        }
 
         //开启事务
         Db::beginTransaction();
@@ -88,7 +93,7 @@ class Destroy extends AbstractAction
             }
 
             //查询该分组下的标签
-            $tags = $this->contactTagService->getWorkContactTagsByGroupIds([$params['groupId']], ['id']);
+            $tags = $this->contactTagService->getWorkContactTagsByCorpIdGroupIdsStrict((int) user()['corpIds'][0], [$params['groupId']], ['id']);
 
             if (! empty($tags)) {
                 $tagIds = array_column($tags, 'id');

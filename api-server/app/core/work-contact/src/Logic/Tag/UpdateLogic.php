@@ -53,21 +53,28 @@ class UpdateLogic
      */
     public function handle(array $params)
     {
+        $corpId = (int) user()['corpIds'][0];
         //若修改了信息做校验
         if ($params['isUpdate'] == 1) {
             //查询要修改的分组下是否已存在相同标签名称
             $info = $this->contactTagService
-                ->getWorkContactTagsByNamesGroupId([$params['tagName']], $params['groupId']);
+                ->getWorkContactTagsByCorpIdNamesGroupId($corpId, [$params['tagName']], (int) $params['groupId'], ['id']);
 
-            if (! empty($info)) {
+            if (! empty($info) && (int) $info[0]['id'] !== (int) $params['tagId']) {
                 throw new CommonException(ErrorCode::SERVER_ERROR, '该分组下已存在相同标签名');
             }
         }
 
         //查询该标签对应的wx_contact_tag_id和编辑之前的分组id
-        $tagInfo = $this->contactTagService->getWorkContactTagById((int) $params['tagId'], ['wx_contact_tag_id', 'contact_tag_group_id']);
+        $tagInfo = $this->contactTagService->getWorkContactTagByCorpIdId($corpId, (int) $params['tagId'], ['wx_contact_tag_id', 'contact_tag_group_id']);
         if (empty($tagInfo)) {
             throw new CommonException(ErrorCode::SERVER_ERROR, '查询不到该标签信息');
+        }
+        if ((int) $params['groupId'] !== 0) {
+            $targetGroup = $this->contactTagGroupService->getWorkContactTagGroupByCorpIdId($corpId, (int) $params['groupId'], ['id']);
+            if (empty($targetGroup)) {
+                throw new CommonException(ErrorCode::INVALID_PARAMS, '客户标签分组不存在');
+            }
         }
 
 //        if ($tagInfo['contactTagGroupId'] != 0) {
@@ -113,7 +120,7 @@ class UpdateLogic
                     $this->service->delete($deleteParams, [$tagInfo['contactTagGroupId']], user()['corpIds'][0]);
                 }
                 //查询要修改的分组是否有 wx_group_id
-                $groupInfo = $this->contactTagGroupService->getWorkContactTagGroupById((int) $params['groupId'], ['wx_group_id', 'group_name']);
+                $groupInfo = $this->contactTagGroupService->getWorkContactTagGroupByCorpIdId($corpId, (int) $params['groupId'], ['wx_group_id', 'group_name']);
 
                 //如果有 将该标签新增到该分组下
                 if (! empty($groupInfo['wxGroupId'])) {

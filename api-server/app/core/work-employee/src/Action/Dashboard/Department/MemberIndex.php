@@ -16,6 +16,7 @@ use Hyperf\HttpServer\Annotation\Middleware;
 use Hyperf\HttpServer\Annotation\Middlewares;
 use Hyperf\HttpServer\Annotation\RequestMapping;
 use MoChat\App\Common\Middleware\DashboardAuthMiddleware;
+use MoChat\App\Rbac\Middleware\PermissionMiddleware;
 use MoChat\App\WorkDepartment\Contract\WorkDepartmentContract;
 use MoChat\App\WorkEmployee\Constants\Status;
 use MoChat\App\WorkEmployee\Contract\WorkEmployeeContract;
@@ -56,7 +57,8 @@ class MemberIndex extends AbstractAction
 
     /**
      * @Middlewares({
-     *     @Middleware(DashboardAuthMiddleware::class)
+     *     @Middleware(DashboardAuthMiddleware::class),
+     *     @Middleware(PermissionMiddleware::class)
      * })
      * @RequestMapping(path="/dashboard/workEmployeeDepartment/memberIndex", methods="GET")
      * @return array 响应数据
@@ -69,7 +71,7 @@ class MemberIndex extends AbstractAction
         $this->validated($params);
 
         //获取信息
-        return $this->getEmployeeInfo($params['departmentIds']);
+        return $this->getEmployeeInfo($params['departmentIds'], user());
     }
 
     /**
@@ -97,21 +99,47 @@ class MemberIndex extends AbstractAction
      * @param $departmentIds
      * @return array
      */
-    private function getEmployeeInfo($departmentIds)
+    private function getEmployeeInfo($departmentIds, array $user)
     {
+        $corpId = (int) $user['corpIds'][0];
+        $departmentIds = array_values(array_unique(array_filter(array_map('intval', explode(',', $departmentIds)))));
+        if (empty($departmentIds)) {
+            return [];
+        }
+
+        $departmentInfo = $this->departmentService->getWorkDepartmentsBySearch([
+            'corp_id' => $corpId,
+            'id' => $departmentIds,
+        ], ['id', 'name']);
+        if (empty($departmentInfo)) {
+            return [];
+        }
+        $departmentIds = array_column($departmentInfo, 'id');
+
         //查询已激活成员信息
         $employeeInfo = $this->employeeService->getWorkEmployeesByCorpIdStatus(
-            (int) user()['corpIds'][0],
+            $corpId,
             (int) Status::ACTIVE,
             ['id', 'name']
         );
         if (empty($employeeInfo)) {
             return [];
         }
+        if (! empty($user['dataPermission'])) {
+            $visibleEmployeeIds = array_map('intval', $user['deptEmployeeIds'] ?? []);
+            if (empty($visibleEmployeeIds)) {
+                return [];
+            }
+            $employeeInfo = array_values(array_filter($employeeInfo, function ($employee) use ($visibleEmployeeIds) {
+                return in_array((int) $employee['id'], $visibleEmployeeIds, true);
+            }));
+            if (empty($employeeInfo)) {
+                return [];
+            }
+        }
         $employeeInfo = array_column($employeeInfo, null, 'id');
         $activeEmployeeIds = array_column($employeeInfo, 'id');
 
-        $departmentIds = explode(',', $departmentIds);
         //获取部门、成员关联信息
         $employeeDepartment = $this->employeeDepartmentService
             ->getWorkEmployeeDepartmentsByOtherId($departmentIds, $activeEmployeeIds, ['employee_id', 'department_id']);
@@ -120,11 +148,7 @@ class MemberIndex extends AbstractAction
             return [];
         }
 
-        //根据部门id获取部门名称
-        $departmentInfo = $this->departmentService->getWorkDepartmentsById($departmentIds, ['id', 'name']);
-        if (! empty($departmentInfo)) {
-            $departmentInfo = array_column($departmentInfo, null, 'id');
-        }
+        $departmentInfo = array_column($departmentInfo, null, 'id');
 
         foreach ($employeeDepartment as &$val) {
             $val['departmentName'] = '';

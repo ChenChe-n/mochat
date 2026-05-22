@@ -63,8 +63,8 @@ class Destroy extends AbstractAction
         $tagIds = explode(',', $params['tagId']);
 
         //查询该标签对应的wx_contact_tag_id
-        $tagInfo = $this->contactTagService->getWorkContactTagsById($tagIds, ['wx_contact_tag_id', 'contact_tag_group_id']);
-        if (empty($tagInfo)) {
+        $tagInfo = $this->contactTagService->getWorkContactTagsByCorpIdId((int) user()['corpIds'][0], $tagIds, ['id', 'wx_contact_tag_id', 'contact_tag_group_id']);
+        if (count($tagInfo) !== count(array_unique(array_map('intval', $tagIds)))) {
             throw new CommonException(ErrorCode::SERVER_ERROR, '查询不到该标签信息');
         }
 
