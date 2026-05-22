@@ -62,6 +62,7 @@ class StatusUpdate extends AbstractAction
         ## 接收参数
         $roleId = (int) $this->request->input('roleId');
         $status = (int) $this->request->input('status');
+        $this->assertTenantRole($roleId, (int) user()['tenantId']);
 
         try {
             ## 数据入表
@@ -100,5 +101,13 @@ class StatusUpdate extends AbstractAction
             'status.integer' => '状态 必需为整数',
             'status.in' => '状态 值必须在列表内：[1,2]',
         ];
+    }
+
+    private function assertTenantRole(int $roleId, int $tenantId): void
+    {
+        $role = $this->roleService->getRbacRolesByIdTenantId($roleId, $tenantId, ['id']);
+        if (empty($role)) {
+            throw new CommonException(ErrorCode::URI_NOT_FOUND, '角色不存在');
+        }
     }
 }

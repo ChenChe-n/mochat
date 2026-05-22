@@ -65,6 +65,7 @@ class Destroy extends AbstractAction
         if (! isset($user['corpIds']) || count($user['corpIds']) != 1) {
             throw new CommonException(ErrorCode::INVALID_PARAMS, '未选择登录企业，不可操作');
         }
+        $this->assertTenantRole($id, (int) $user['tenantId']);
 
         if (! empty($this->getEmployeesCountByRoleId($id, $user['corpIds'][0]))) {
             throw new CommonException(ErrorCode::INVALID_PARAMS, '角色下有成员，不能删除角色');
@@ -118,5 +119,13 @@ class Destroy extends AbstractAction
         $employee = $this->workEmployeeService->getWorkEmployeesCountByRoleId($where);
 
         return ! empty($employee) ? $employee : 0;
+    }
+
+    private function assertTenantRole(int $roleId, int $tenantId): void
+    {
+        $role = $this->roleService->getRbacRolesByIdTenantId($roleId, $tenantId, ['id']);
+        if (empty($role)) {
+            throw new CommonException(ErrorCode::URI_NOT_FOUND, '角色不存在');
+        }
     }
 }

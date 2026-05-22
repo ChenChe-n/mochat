@@ -14,7 +14,9 @@ use Hyperf\HttpServer\Annotation\Controller;
 use Hyperf\HttpServer\Annotation\Middleware;
 use Hyperf\HttpServer\Annotation\Middlewares;
 use Hyperf\HttpServer\Annotation\RequestMapping;
+use Hyperf\Di\Annotation\Inject;
 use MoChat\App\Common\Middleware\DashboardAuthMiddleware;
+use MoChat\App\Rbac\Contract\RbacRoleContract;
 use MoChat\App\Rbac\Logic\Role\PermissionStoreLogic;
 use MoChat\App\Rbac\Middleware\PermissionMiddleware;
 use MoChat\Framework\Action\AbstractAction;
@@ -27,6 +29,12 @@ use MoChat\Framework\Exception\CommonException;
  */
 class PermissionStore extends AbstractAction
 {
+    /**
+     * @Inject
+     * @var RbacRoleContract
+     */
+    protected $roleService;
+
     /**
      * @Middlewares({
      *     @Middleware(DashboardAuthMiddleware::class),
@@ -41,6 +49,7 @@ class PermissionStore extends AbstractAction
         if (! $roleId) {
             throw new CommonException(ErrorCode::INVALID_PARAMS, '角色必须');
         }
+        $this->assertTenantRole($roleId, (int) user()['tenantId']);
         $menuIds = $this->request->post('menuIds', []);
 
         $res = $this->container->get(PermissionStoreLogic::class)->handle($roleId, $menuIds);
@@ -49,5 +58,13 @@ class PermissionStore extends AbstractAction
         }
 
         return [];
+    }
+
+    private function assertTenantRole(int $roleId, int $tenantId): void
+    {
+        $role = $this->roleService->getRbacRolesByIdTenantId($roleId, $tenantId, ['id']);
+        if (empty($role)) {
+            throw new CommonException(ErrorCode::URI_NOT_FOUND, '角色不存在');
+        }
     }
 }

@@ -116,6 +116,10 @@ class StoreLogic
     {
         ## 验证名称是否存在
         $this->nameIsUnique($data['name']);
+        $sourceRole = $this->roleService->getRbacRolesByIdTenantId($roleId, $this->tenantId, ['id']);
+        if (empty($sourceRole)) {
+            throw new CommonException(ErrorCode::URI_NOT_FOUND, '角色不存在');
+        }
         ## 根据角色获取菜单权限
         $roleMenus = $this->roleMenuService->getRbacRoleMenusByRoleId([$roleId], ['menu_id']);
         if (! $roleMenus) {

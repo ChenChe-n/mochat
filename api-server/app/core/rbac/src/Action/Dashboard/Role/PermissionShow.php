@@ -16,6 +16,7 @@ use Hyperf\HttpServer\Annotation\Middleware;
 use Hyperf\HttpServer\Annotation\Middlewares;
 use Hyperf\HttpServer\Annotation\RequestMapping;
 use MoChat\App\Common\Middleware\DashboardAuthMiddleware;
+use MoChat\App\Rbac\Contract\RbacRoleContract;
 use MoChat\App\Rbac\Logic\Role\PermissionShowLogic;
 use MoChat\App\Rbac\Middleware\PermissionMiddleware;
 use MoChat\Framework\Action\AbstractAction;
@@ -37,6 +38,12 @@ class PermissionShow extends AbstractAction
     protected $logic;
 
     /**
+     * @Inject
+     * @var RbacRoleContract
+     */
+    protected $roleService;
+
+    /**
      * @Middlewares({
      *     @Middleware(DashboardAuthMiddleware::class),
      *     @Middleware(PermissionMiddleware::class)
@@ -51,7 +58,16 @@ class PermissionShow extends AbstractAction
         if (! $roleId) {
             throw new CommonException(ErrorCode::INVALID_PARAMS, '角色ID必须');
         }
+        $this->assertTenantRole($roleId, (int) user()['tenantId']);
 
         return $this->logic->roleMenus($roleId);
+    }
+
+    private function assertTenantRole(int $roleId, int $tenantId): void
+    {
+        $role = $this->roleService->getRbacRolesByIdTenantId($roleId, $tenantId, ['id']);
+        if (empty($role)) {
+            throw new CommonException(ErrorCode::URI_NOT_FOUND, '角色不存在');
+        }
     }
 }

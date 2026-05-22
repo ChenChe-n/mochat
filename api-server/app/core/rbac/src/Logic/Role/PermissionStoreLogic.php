@@ -49,12 +49,15 @@ class PermissionStoreLogic
         ## 所有菜单的所有上级菜单
         if (! empty($menuIds)) {
             $allMenus = $this->menuService->getRbacMenusById($menuIds, ['id', 'path']);
+            $validMenuIds = [];
+            $pathMenuIds = [];
             foreach ($allMenus as $allMenu) {
+                $validMenuIds[] = (int) $allMenu['id'];
                 $allMenuIds = null;
                 preg_match_all('/#(\d+)#/', $allMenu['path'], $allMenuIds);
-                isset($allMenuIds[1][0]) && $menuIds = array_merge($menuIds, $allMenuIds[1]);
+                isset($allMenuIds[1]) && $pathMenuIds = array_merge($pathMenuIds, $allMenuIds[1]);
             }
-            $menuIds = array_unique($menuIds);
+            $menuIds = array_values(array_unique(array_merge($validMenuIds, array_map('intval', $pathMenuIds))));
         }
 
         $dbData = $this->diffRoleMenu($roleId, $menuIds);
