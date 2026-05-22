@@ -583,6 +583,35 @@ class WorkContactEmployeeService extends AbstractService implements WorkContactE
         return $res->toArray();
     }
 
+    public function countEmployeesWorkContactByEmployeeIds(array $employeeIds): array
+    {
+        if (empty($employeeIds)) {
+            return [];
+        }
+
+        $res = Db::table('work_employee')
+            ->where('deleted_at', null)
+            ->whereIn('id', $employeeIds)
+            ->get();
+
+        if (empty($res)) {
+            return [];
+        }
+
+        $employees = $res->toArray();
+
+        $result = [];
+        foreach ($employees as &$employee) {
+            $employeeTemp = $this->countWorkContactEmployeesByEmployee([$employee->id]);
+            $result[] = [
+                'name' => $employee->name,
+                'total' => empty($employeeTemp) ? 0 : $employeeTemp[0]->total,
+            ];
+        }
+
+        return $result;
+    }
+
     /**
      * 计算员工截止到某时间持有的总客户数.
      * @param array $employeeIds 员工id
@@ -681,6 +710,21 @@ class WorkContactEmployeeService extends AbstractService implements WorkContactE
             ->count();
     }
 
+    public function countWorkContactEmployeesByCorpIdEmployeeIdsTime(int $corpId, array $employeeIds, string $startTime, string $endTime): int
+    {
+        if (empty($employeeIds)) {
+            return 0;
+        }
+
+        return $this->model::query()
+            ->where('deleted_at', null)
+            ->where('corp_id', $corpId)
+            ->whereIn('employee_id', $employeeIds)
+            ->where('create_time', '>', $startTime)
+            ->where('create_time', '<', $endTime)
+            ->count();
+    }
+
     /**
      * 计算企业某段时间内流失客户数.
      * @param int $corpId 企业id
@@ -693,6 +737,22 @@ class WorkContactEmployeeService extends AbstractService implements WorkContactE
         return $this->model::query()
             ->withTrashed()
             ->where('corp_id', $corpId)
+            ->where('deleted_at', '>', $startTime)
+            ->where('deleted_at', '<', $endTime)
+            ->whereIn('status', [Status::REMOVE, Status::PASSIVE_REMOVE])
+            ->count();
+    }
+
+    public function countLossWorkContactEmployeesByCorpIdEmployeeIdsTime(int $corpId, array $employeeIds, string $startTime, string $endTime): int
+    {
+        if (empty($employeeIds)) {
+            return 0;
+        }
+
+        return $this->model::query()
+            ->withTrashed()
+            ->where('corp_id', $corpId)
+            ->whereIn('employee_id', $employeeIds)
             ->where('deleted_at', '>', $startTime)
             ->where('deleted_at', '<', $endTime)
             ->whereIn('status', [Status::REMOVE, Status::PASSIVE_REMOVE])
@@ -713,6 +773,19 @@ class WorkContactEmployeeService extends AbstractService implements WorkContactE
             ->count();
     }
 
+    public function countWorkContactEmployeesByCorpIdEmployeeIds(int $corpId, array $employeeIds, array $status): int
+    {
+        if (empty($employeeIds)) {
+            return 0;
+        }
+
+        return $this->model::query()
+            ->where('corp_id', $corpId)
+            ->whereIn('employee_id', $employeeIds)
+            ->whereIn('status', $status)
+            ->count();
+    }
+
     /**
      * 计算企业截至到某时间的总客户数.
      * @param int $corpId 企业id
@@ -725,6 +798,21 @@ class WorkContactEmployeeService extends AbstractService implements WorkContactE
         return $this->model::query()
             ->where('deleted_at', null)
             ->where('corp_id', $corpId)
+            ->where('create_time', '<', $endTime)
+            ->whereIn('status', $status)
+            ->count();
+    }
+
+    public function countWorkContactEmployeesByEmployeeIdsTime(int $corpId, array $employeeIds, array $status, string $endTime): int
+    {
+        if (empty($employeeIds)) {
+            return 0;
+        }
+
+        return $this->model::query()
+            ->where('deleted_at', null)
+            ->where('corp_id', $corpId)
+            ->whereIn('employee_id', $employeeIds)
             ->where('create_time', '<', $endTime)
             ->whereIn('status', $status)
             ->count();
@@ -783,6 +871,20 @@ class WorkContactEmployeeService extends AbstractService implements WorkContactE
             ->where('contact_id', $contactId)
             ->where('corp_id', $corpId)
             ->first($columns);
+
+        $res || $res = collect([]);
+        return $res->toArray();
+    }
+
+    /**
+     * 查询多条 - 根据企业ID和客户ID.
+     */
+    public function getWorkContactEmployeesByCorpIdContactId(int $corpId, int $contactId, array $columns = ['*']): array
+    {
+        $res = $this->model::query()
+            ->where('corp_id', $corpId)
+            ->where('contact_id', $contactId)
+            ->get($columns);
 
         $res || $res = collect([]);
         return $res->toArray();

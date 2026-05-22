@@ -201,7 +201,7 @@ class InviteData extends AbstractAction
             $contact = $this->workContactService->getWorkContactByCorpIdUnionId(user()['corpIds'][0], $val['unionId'], ['id']);
             $employeeId = 0;
             if (! empty($contact)) {
-                $employee = $this->workContactEmployeeService->getWorkContactEmployeeByCorpIdContactId(user()['corpIds'][0], $contact['id'], ['employee_id']);
+                $employee = $this->workContactEmployeeService->getWorkContactEmployeeByCorpIdContactId($contact['id'], user()['corpIds'][0], ['employee_id']);
                 $employeeId = empty($employee) ? 0 : $employee['employeeId'];
             }
             $list[$key] = [

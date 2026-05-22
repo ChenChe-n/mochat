@@ -92,9 +92,10 @@ class Show extends AbstractAction
         $userId = $this->request->input('userId');
         ## 查询数据
         $data = $this->userService->getUserById((int) $userId);
-        if (empty($data)) {
+        if (empty($data) || (int) $data['tenantId'] !== (int) $user['tenantId']) {
             throw new CommonException(ErrorCode::INVALID_PARAMS, '当前账户不存在');
         }
+        $employee = $this->assertVisibleTarget((int) $data['id'], $user);
         ## 角色信息
         $roleInfo = $this->findRoleInfo((int) $data['id']);
 
@@ -102,9 +103,9 @@ class Show extends AbstractAction
         $data['userName'] = $data['name'];
         $data['roleId'] = $roleInfo['roleId'];
         $data['roleName'] = $roleInfo['roleName'];
-        $data['employee'] = $this->getEmployeeInfo((int) $data['id'], (int) user()['corpIds'][0]);
+        $data['employee'] = $this->formatEmployeeInfo($employee);
         $data['employeeId'] = $data['employee']['employeeId'] ?? 0;
-        $data['department'] = $this->getDepartmentList((int) $data['id'], (int) user()['corpIds'][0]);
+        $data['department'] = $this->getDepartmentListByEmployeeId((int) ($employee['id'] ?? 0));
         unset($data['id'], $data['name'], $data['position'], $data['loginTime'], $data['password'], $data['createdAt'], $data['updatedAt'], $data['deletedAt']);
 
         return $data;
@@ -156,18 +157,12 @@ class Show extends AbstractAction
         ];
     }
 
-    /**
-     * @param int $userId 用户ID
-     * @param int $corpId 企业ID
-     * @return array 响应数组
-     */
-    private function getDepartmentList(int $userId, int $corpId): array
+    private function getDepartmentListByEmployeeId(int $employeeId): array
     {
-        $employee = $this->workEmployeeService->getWorkEmployeeByCorpIdLogUserId($corpId, $userId, ['id']);
-        if (empty($employee)) {
+        if (empty($employeeId)) {
             return [];
         }
-        $employeeDepartments = $this->workEmployeeDepartmentService->getWorkEmployeeDepartmentsByEmployeeId((int) $employee['id'], ['department_id']);
+        $employeeDepartments = $this->workEmployeeDepartmentService->getWorkEmployeeDepartmentsByEmployeeId($employeeId, ['department_id']);
         if (empty($employeeDepartments)) {
             return [];
         }
@@ -181,13 +176,26 @@ class Show extends AbstractAction
         }, $departmentList);
     }
 
-    private function getEmployeeInfo(int $userId, int $corpId): array
+    private function assertVisibleTarget(int $userId, array $user): array
     {
-        $employee = $this->workEmployeeService->getWorkEmployeeByCorpIdLogUserId($corpId, $userId, ['id', 'name', 'wx_user_id']);
+        $employee = $this->workEmployeeService->getWorkEmployeeByCorpIdLogUserId((int) $user['corpIds'][0], $userId, ['id', 'name', 'wx_user_id']);
+        if (! empty($user['isSuperAdmin'])) {
+            return $employee;
+        }
+        if (empty($employee)) {
+            throw new CommonException(ErrorCode::INVALID_PARAMS, '当前账户未绑定当前企业成员');
+        }
+        if (! empty($user['dataPermission']) && ! in_array((int) $employee['id'], array_map('intval', $user['deptEmployeeIds'] ?? []), true)) {
+            throw new CommonException(ErrorCode::INVALID_PARAMS, '当前账户不在当前数据范围内');
+        }
+        return $employee;
+    }
+
+    private function formatEmployeeInfo(array $employee): array
+    {
         if (empty($employee)) {
             return [];
         }
-
         return [
             'employeeId' => $employee['id'],
             'employeeName' => $employee['name'],

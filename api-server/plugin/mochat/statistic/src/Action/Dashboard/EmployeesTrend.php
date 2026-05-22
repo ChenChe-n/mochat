@@ -92,8 +92,15 @@ class EmployeesTrend extends AbstractAction
             //有，先按id取出员工数据
             $employeeList = $this->employeesLogic->getEmployeesById($params['employees']);
         } else {
-            //没有，按企业查所有人
-            $employeeList = $this->employeesLogic->getEmployees($user['corpIds'][0]);
+            //没有，按当前账号数据范围查员工
+            $employeeList = $this->employeesLogic->getVisibleEmployees($user['corpIds'][0], $user);
+        }
+        $employeeList = $this->filterVisibleEmployees($employeeList, $user);
+        if (empty($employeeList)) {
+            return [
+                'list' => [],
+                'table' => [],
+            ];
         }
 
         //取出微信字母id
@@ -107,7 +114,7 @@ class EmployeesTrend extends AbstractAction
         if ($res['errcode'] !== 0) {
             $this->logger->error(sprintf('获取「联系客户统计」数据 失败::[%s]', json_encode($res, JSON_THROW_ON_ERROR)));
         }
-        $res = $res['behavior_data'];
+        $res = $res['behavior_data'] ?? [];
 
         $result = [];
         foreach ($res as $re) {
@@ -139,5 +146,18 @@ class EmployeesTrend extends AbstractAction
         }
 
         return $result;
+    }
+
+    private function filterVisibleEmployees(array $employeeList, array $user): array
+    {
+        $corpId = (int) $user['corpIds'][0];
+        $visibleEmployeeIds = empty($user['dataPermission']) ? [] : array_map('intval', $user['deptEmployeeIds'] ?? []);
+
+        return array_values(array_filter($employeeList, static function ($employee) use ($corpId, $visibleEmployeeIds, $user) {
+            if ((int) $employee['corpId'] !== $corpId) {
+                return false;
+            }
+            return empty($user['dataPermission']) || in_array((int) $employee['id'], $visibleEmployeeIds, true);
+        }));
     }
 }

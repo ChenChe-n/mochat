@@ -79,6 +79,8 @@ class RoomLogic
      */
     public function getRoomList(array $params)
     {
+        $user = user();
+        $visibleEmployeeIds = empty($user['dataPermission']) ? null : array_map('intval', $user['deptEmployeeIds'] ?? []);
         $unassignedList = $this->workUnassignedService->getWorkUnassignedByCorpId([$params['corpId']]);
 
         $userIdFilter = [];
@@ -90,6 +92,9 @@ class RoomLogic
         $res = [];
         foreach ($userIdFilter as $userWxId) {
             $employee = $this->workEmployeeService->getWorkEmployeeByWxUserIdCorpId($userWxId, (int) $params['corpId']);
+            if (empty($employee) || ($visibleEmployeeIds !== null && ! in_array((int) $employee['id'], $visibleEmployeeIds, true))) {
+                continue;
+            }
             $roomList = $this->workRoomService->getWorkRoomsByCorpIdOwnerIds($params['corpId'], [
                 'employees' => [$employee['id']],
                 'name' => $params['roomName'],

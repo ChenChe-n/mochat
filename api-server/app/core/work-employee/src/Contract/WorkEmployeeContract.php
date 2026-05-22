@@ -180,6 +180,11 @@ interface WorkEmployeeContract
     public function getWorkEmployeeByWxUserId(string $wxUserId, array $columns = ['*']): array;
 
     /**
+     * 查询单条 - 根据企业ID和微信成员UserId.
+     */
+    public function getWorkEmployeeByCorpIdAndWxUserId(int $corpId, string $wxUserId, array $columns = ['*']): array;
+
+    /**
      * 修改多条 - 根据Ids批量修改.
      */
     public function batchUpdateByIds(array $values, bool $transToSnake = false, bool $isColumnFilter = false): int;

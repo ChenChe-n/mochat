@@ -17,7 +17,9 @@ use Hyperf\HttpServer\Annotation\Middleware;
 use Hyperf\HttpServer\Annotation\Middlewares;
 use Hyperf\HttpServer\Annotation\RequestMapping;
 use MoChat\App\Common\Middleware\DashboardAuthMiddleware;
+use MoChat\App\Rbac\Middleware\PermissionMiddleware;
 use MoChat\App\User\Contract\UserContract;
+use MoChat\App\WorkEmployee\Contract\WorkEmployeeContract;
 use MoChat\Framework\Action\AbstractAction;
 use MoChat\Framework\Constants\ErrorCode;
 use MoChat\Framework\Exception\CommonException;
@@ -43,6 +45,12 @@ class PasswordReset extends AbstractAction
 
     /**
      * @Inject
+     * @var WorkEmployeeContract
+     */
+    protected $workEmployeeService;
+
+    /**
+     * @Inject
      * @var AuthManager
      */
     protected $authManager;
@@ -55,7 +63,8 @@ class PasswordReset extends AbstractAction
 
     /**
      * @Middlewares({
-     *     @Middleware(DashboardAuthMiddleware::class)
+     *     @Middleware(DashboardAuthMiddleware::class),
+     *     @Middleware(PermissionMiddleware::class)
      * })
      * @RequestMapping(path="/dashboard/user/passwordReset", methods="put")
      * @return array 返回数组
@@ -70,9 +79,11 @@ class PasswordReset extends AbstractAction
         $userId = $this->request->input('id');
         $newPassword = $this->request->input('newPassword');
 
-        ## 验证userId的有效性
-        $userInfo = $this->userService->getUserById((int) $user['id'], ['id', 'password']);
-        if (empty($userInfo)) {
+        $this->assertManageableUser((int) $userId, $user);
+
+        ## 验证当前用户的有效性
+        $currentUser = $this->userService->getUserById((int) $user['id'], ['id']);
+        if (empty($currentUser)) {
             throw new CommonException(ErrorCode::INVALID_PARAMS, '当前账户不存在，不可操作');
         }
         ## 生成新密码
@@ -90,6 +101,28 @@ class PasswordReset extends AbstractAction
             throw new CommonException(ErrorCode::SERVER_ERROR, '账户更新密码失败');
         }
         return [];
+    }
+
+    private function assertManageableUser(int $targetUserId, array $user): void
+    {
+        $targetUser = $this->userService->getUserById($targetUserId, ['id', 'tenant_id', 'is_super_admin']);
+        if (empty($targetUser) || (int) $targetUser['tenantId'] !== (int) $user['tenantId']) {
+            throw new CommonException(ErrorCode::INVALID_PARAMS, '目标账户不存在，不可操作');
+        }
+        if (! empty($targetUser['isSuperAdmin'])) {
+            throw new CommonException(ErrorCode::INVALID_PARAMS, '超级管理员账户不可在此处重置密码');
+        }
+        if (! empty($user['isSuperAdmin'])) {
+            return;
+        }
+
+        $employee = $this->workEmployeeService->getWorkEmployeeByCorpIdLogUserId((int) $user['corpIds'][0], $targetUserId, ['id']);
+        if (empty($employee)) {
+            throw new CommonException(ErrorCode::INVALID_PARAMS, '目标账户未绑定当前企业成员，不可操作');
+        }
+        if (! empty($user['dataPermission']) && ! in_array((int) $employee['id'], array_map('intval', $user['deptEmployeeIds'] ?? []), true)) {
+            throw new CommonException(ErrorCode::INVALID_PARAMS, '目标账户不在当前数据范围内，不可操作');
+        }
     }
 
     /**

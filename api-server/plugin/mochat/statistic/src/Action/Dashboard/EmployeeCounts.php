@@ -78,7 +78,7 @@ class EmployeeCounts extends AbstractAction
             throw new CommonException(ErrorCode::INVALID_PARAMS, '日期范围不能超过30天');
         }
         $user = user();
-        $employeeList = $this->employeesLogic->getEmployees($user['corpIds'][0]);
+        $employeeList = $this->employeesLogic->getVisibleEmployees($user['corpIds'][0], $user);
         //总人数
         $employeeTotal = count($employeeList);
 
@@ -93,7 +93,7 @@ class EmployeeCounts extends AbstractAction
             if ($res['errcode'] !== 0) {
                 $this->logger->error(sprintf('获取「联系客户统计」数据 失败::[%s]', json_encode($res, JSON_THROW_ON_ERROR)));
             }
-            $temp = $res['behavior_data'];
+            $temp = $res['behavior_data'] ?? [];
             $one = [
                 'id' => $employee['id'],
                 'name' => $employee['name'],
@@ -111,8 +111,8 @@ class EmployeeCounts extends AbstractAction
                 $one['avg_reply_time'] += @$item['avg_reply_time'] ? $item['avg_reply_time'] : 0;
             }
 
-            $one['reply_percentage'] = round($one['reply_percentage'] / count($temp), 2);
-            $one['avg_reply_time'] = round($one['avg_reply_time'] / count($temp), 2);
+            $one['reply_percentage'] = empty($temp) ? 0 : round($one['reply_percentage'] / count($temp), 2);
+            $one['avg_reply_time'] = empty($temp) ? 0 : round($one['avg_reply_time'] / count($temp), 2);
 
             $table[] = $one;
         }

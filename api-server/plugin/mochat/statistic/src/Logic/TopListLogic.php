@@ -42,8 +42,14 @@ class TopListLogic
     public function getTopList(int $num): array
     {
         $user = user();
-        $list = $this->workContactEmployeeService->countEmployeesWorkContactByCorpId($user['corpIds'][0]);
-        $total = $this->workContactEmployeeService->countWorkContactEmployeesByCorpId($user['corpIds'][0], [1]);
+        if (empty($user['dataPermission'])) {
+            $list = $this->workContactEmployeeService->countEmployeesWorkContactByCorpId($user['corpIds'][0]);
+            $total = $this->workContactEmployeeService->countWorkContactEmployeesByCorpId($user['corpIds'][0], [1]);
+        } else {
+            $employeeIds = array_map('intval', $user['deptEmployeeIds'] ?? []);
+            $list = $this->workContactEmployeeService->countEmployeesWorkContactByEmployeeIds($employeeIds);
+            $total = $this->workContactEmployeeService->countWorkContactEmployeesByCorpIdEmployeeIds($user['corpIds'][0], $employeeIds, [1]);
+        }
 
         usort($list, [$this, 'sortHandle']);
 

@@ -244,6 +244,8 @@ interface WorkContactEmployeeContract
      */
     public function countWorkContactEmployeesByEmployee(array $employeeIds): array;
 
+    public function countEmployeesWorkContactByEmployeeIds(array $employeeIds): array;
+
     /**
      * 查询多条 - 根据企业自定义的state参数.
      * @param string $state 企业自定义的state参数
@@ -261,6 +263,8 @@ interface WorkContactEmployeeContract
      */
     public function countWorkContactEmployeesByCorpIdTime(int $corpId, string $startTime, string $endTime): int;
 
+    public function countWorkContactEmployeesByCorpIdEmployeeIdsTime(int $corpId, array $employeeIds, string $startTime, string $endTime): int;
+
     /**
      * 计算企业某段时间内流失客户数.
      * @param int $corpId 企业id
@@ -270,6 +274,8 @@ interface WorkContactEmployeeContract
      */
     public function countLossWorkContactEmployeesByCorpIdTime(int $corpId, string $startTime, string $endTime): int;
 
+    public function countLossWorkContactEmployeesByCorpIdEmployeeIdsTime(int $corpId, array $employeeIds, string $startTime, string $endTime): int;
+
     /**
      * 计算企业总客户数.
      * @param int $corpId 企业id
@@ -277,6 +283,12 @@ interface WorkContactEmployeeContract
      * @return int 返回值
      */
     public function countWorkContactEmployeesByCorpId(int $corpId, array $status): int;
+
+    public function countWorkContactEmployeesByCorpIdEmployeeIds(int $corpId, array $employeeIds, array $status): int;
+
+    public function countWorkContactEmployeesByTime(int $corpId, array $status, string $endTime): int;
+
+    public function countWorkContactEmployeesByEmployeeIdsTime(int $corpId, array $employeeIds, array $status, string $endTime): int;
 
     /**
      * 修改多条 - 根据员工id.
@@ -309,6 +321,11 @@ interface WorkContactEmployeeContract
      * @return array 返回值
      */
     public function getWorkContactEmployeeByCorpIdContactId(int $contactId, int $corpId, array $columns = ['*']): array;
+
+    /**
+     * 查询多条 - 根据企业ID和客户ID.
+     */
+    public function getWorkContactEmployeesByCorpIdContactId(int $corpId, int $contactId, array $columns = ['*']): array;
 
     /**
      * 查询多条

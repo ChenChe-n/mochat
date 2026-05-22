@@ -16,6 +16,9 @@ use Hyperf\HttpServer\Annotation\Middleware;
 use Hyperf\HttpServer\Annotation\Middlewares;
 use Hyperf\HttpServer\Annotation\RequestMapping;
 use MoChat\App\Common\Middleware\DashboardAuthMiddleware;
+use MoChat\App\Rbac\Middleware\PermissionMiddleware;
+use MoChat\App\WorkContact\Contract\WorkContactEmployeeContract;
+use MoChat\App\WorkContact\Contract\WorkContactTagContract;
 use MoChat\App\WorkContact\Contract\WorkContactTagPivotContract;
 use MoChat\Framework\Action\AbstractAction;
 use MoChat\Framework\Constants\ErrorCode;
@@ -39,8 +42,21 @@ class BatchLabeling extends AbstractAction
     private $contactTagPivotService;
 
     /**
+     * @Inject
+     * @var WorkContactEmployeeContract
+     */
+    private $contactEmployeeService;
+
+    /**
+     * @Inject
+     * @var WorkContactTagContract
+     */
+    private $contactTagService;
+
+    /**
      * @Middlewares({
-     *     @Middleware(DashboardAuthMiddleware::class)
+     *     @Middleware(DashboardAuthMiddleware::class),
+     *     @Middleware(PermissionMiddleware::class)
      * })
      * @RequestMapping(path="/dashboard/workContact/batchLabeling", methods="POST")
      */
@@ -54,16 +70,20 @@ class BatchLabeling extends AbstractAction
         $this->validated($params);
 
         //客户id
-        $contactIds = explode(',', $params['contactId']);
+        $contactIds = array_values(array_unique(array_filter(array_map('intval', explode(',', $params['contactId'])))));
         //标签id
-        $tagIds = explode(',', $params['tagId']);
+        $tagIds = array_values(array_unique(array_filter(array_map('intval', explode(',', $params['tagId'])))));
+        $this->assertBatchLabelScope($contactIds, $tagIds);
         //查询客户已有标签id
         $columns = [
             'contact_id',
+            'employee_id',
             'contact_tag_id',
         ];
 
-        $contactInfo = $this->contactTagPivotService->getWorkContactTagPivotsByContactIdsTagIds($contactIds, $tagIds, $columns);
+        $contactInfo = array_filter($this->contactTagPivotService->getWorkContactTagPivotsByContactIdsTagIds($contactIds, $tagIds, $columns), function ($item) {
+            return (int) ($item['employeeId'] ?? 0) === (int) user()['workEmployeeId'];
+        });
 
         //例如：客户A选择选了标签，“优质”、“跟进中”，客户B选择了标签“意向强烈”、“跟进中”，
         //那么两个客户在批量打标签的时候“跟进中”这个标签置灰不可以选择，
@@ -116,5 +136,40 @@ class BatchLabeling extends AbstractAction
             'contactId.required' => '客户id必传',
             'tagId.required' => '标签id必传',
         ];
+    }
+
+    private function assertBatchLabelScope(array $contactIds, array $tagIds): void
+    {
+        if (empty($contactIds) || empty($tagIds)) {
+            throw new CommonException(ErrorCode::INVALID_PARAMS, '客户或标签不能为空');
+        }
+
+        $user = user();
+        $corpId = (int) $user['corpIds'][0];
+        $employeeId = (int) $user['workEmployeeId'];
+        $relations = $this->contactEmployeeService->getWorkContactEmployeeByOtherIds([$employeeId], $contactIds, ['id', 'contact_id', 'employee_id', 'corp_id']);
+        $relationContactIds = array_map('intval', array_column($relations, 'contactId'));
+        if (count(array_unique($relationContactIds)) !== count($contactIds)) {
+            throw new CommonException(ErrorCode::INVALID_PARAMS, '只能给当前成员持有的客户批量打标签');
+        }
+        foreach ($relations as $relation) {
+            if ((int) $relation['corpId'] !== $corpId) {
+                throw new CommonException(ErrorCode::INVALID_PARAMS, '客户不属于当前企业');
+            }
+        }
+
+        if (! empty($user['dataPermission']) && ! in_array($employeeId, array_map('intval', $user['deptEmployeeIds'] ?? []), true)) {
+            throw new CommonException(ErrorCode::INVALID_PARAMS, '当前成员不在数据范围内');
+        }
+
+        $tags = $this->contactTagService->getWorkContactTagsById($tagIds, ['id', 'corp_id']);
+        if (count($tags) !== count($tagIds)) {
+            throw new CommonException(ErrorCode::INVALID_PARAMS, '标签不存在');
+        }
+        foreach ($tags as $tag) {
+            if ((int) $tag['corpId'] !== $corpId) {
+                throw new CommonException(ErrorCode::INVALID_PARAMS, '标签不属于当前企业');
+            }
+        }
     }
 }

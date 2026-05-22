@@ -150,10 +150,37 @@ class TransferRoomLogic
      */
     public function transferRoom(array $params)//transferGroupChat
     {
+        $this->assertRoomTransferScope($params);
+
         $res = $this->wxApp($params['corpId'], 'contact')->external_contact->transferGroupChat($params['list'], $params['takeoverUserId']);
         if ($res['errcode'] !== 0) {
             throw new CommonException(ErrorCode::INVALID_PARAMS, '获取离职待分配群列表失败');
         }
         return $res['failed_chat_list'];
+    }
+
+    private function assertRoomTransferScope(array $params): void
+    {
+        $user = user();
+        $corpId = (int) $params['corpId'];
+        $visibleEmployeeIds = empty($user['dataPermission']) ? null : array_map('intval', $user['deptEmployeeIds'] ?? []);
+
+        $takeoverEmployee = $this->workEmployeeService->getWorkEmployeeByCorpIdAndWxUserId($corpId, (string) $params['takeoverUserId'], ['id', 'corp_id']);
+        if (empty($takeoverEmployee)) {
+            throw new CommonException(ErrorCode::INVALID_PARAMS, '接替成员不属于当前企业');
+        }
+        if ($visibleEmployeeIds !== null && empty($visibleEmployeeIds)) {
+            throw new CommonException(ErrorCode::INVALID_PARAMS, '当前账号没有可操作的成员范围');
+        }
+
+        foreach ($params['list'] as $wxChatId) {
+            $room = $this->workRoomService->getWorkRoomByCorpIdWxChatId($corpId, (string) $wxChatId, ['id', 'owner_id']);
+            if (empty($room)) {
+                throw new CommonException(ErrorCode::INVALID_PARAMS, '待分配群聊不属于当前企业');
+            }
+            if ($visibleEmployeeIds !== null && ! in_array((int) $room['ownerId'], $visibleEmployeeIds, true)) {
+                throw new CommonException(ErrorCode::INVALID_PARAMS, '待分配群聊不在当前数据范围内');
+            }
+        }
     }
 }

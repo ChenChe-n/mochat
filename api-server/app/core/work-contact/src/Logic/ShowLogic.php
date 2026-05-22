@@ -20,6 +20,8 @@ use MoChat\App\WorkContact\Contract\WorkContactTagContract;
 use MoChat\App\WorkContact\Contract\WorkContactTagPivotContract;
 use MoChat\App\WorkEmployee\Contract\WorkEmployeeContract;
 use MoChat\App\WorkRoom\Contract\WorkRoomContract;
+use MoChat\Framework\Constants\ErrorCode;
+use MoChat\Framework\Exception\CommonException;
 
 /**
  * 查看客户详情基本信息.
@@ -90,9 +92,17 @@ class ShowLogic
      */
     private $contactId;
 
+    /**
+     * 当前详情所属员工ID.
+     * @var int
+     */
+    private $employeeId;
+
     public function handle(array $params): array
     {
         $this->contactId = $params['contactId'];
+        $this->employeeId = (int) $params['employeeId'];
+        $this->assertVisibleContactEmployee($this->employeeId, (int) $this->contactId);
 
         $columns = [
             'id',
@@ -144,11 +154,18 @@ class ShowLogic
 
         $roomIds = array_column($contactRoom, 'roomId');
         //根据群id查询群名称
-        $roomInfo = $this->room->getWorkRoomsById($roomIds, ['id', 'name']);
+        $roomInfo = $this->room->getWorkRoomsById($roomIds, ['id', 'name', 'corp_id', 'owner_id']);
 
         if (empty($roomInfo)) {
             return [];
         }
+        $visibleEmployeeIds = empty(user()['dataPermission']) ? null : array_map('intval', user()['deptEmployeeIds'] ?? []);
+        $roomInfo = array_filter($roomInfo, function ($room) use ($visibleEmployeeIds) {
+            if ((int) $room['corpId'] !== (int) user()['corpIds'][0]) {
+                return false;
+            }
+            return $visibleEmployeeIds === null || in_array((int) $room['ownerId'], $visibleEmployeeIds, true);
+        });
 
         return array_column($roomInfo, 'name');
     }
@@ -159,26 +176,41 @@ class ShowLogic
      */
     private function getContactTag()
     {
-        $contactTag = $this->contactTagPivot->getWorkContactTagPivotsByContactId($this->contactId, ['contact_tag_id']);
+        $contactTag = $this->contactTagPivot->getWorkContactTagPivotsByOtherId($this->contactId, $this->employeeId, ['contact_tag_id']);
         if (empty($contactTag)) {
             return [];
         }
 
         $tagIds = array_column($contactTag, 'contactTagId');
         //根据标签id查询标签名称
-        $tagInfo = $this->contactTag->getWorkContactTagsById($tagIds, ['id', 'name']);
+        $tagInfo = $this->contactTag->getWorkContactTagsById($tagIds, ['id', 'name', 'corp_id']);
 
         if (empty($tagInfo)) {
             return [];
         }
+        $tagInfo = array_filter($tagInfo, function ($item) {
+            return (int) $item['corpId'] === (int) user()['corpIds'][0];
+        });
         array_walk($tagInfo, function (&$item) {
             $item['tagId'] = $item['id'];
             $item['tagName'] = $item['name'];
 
-            unset($item['id'], $item['name']);
+            unset($item['id'], $item['name'], $item['corpId']);
         });
 
-        return $tagInfo;
+        return array_values($tagInfo);
+    }
+
+    private function assertVisibleContactEmployee(int $employeeId, int $contactId): void
+    {
+        $user = user();
+        $contactEmployee = $this->contactEmployee->findWorkContactEmployeeByOtherIds($employeeId, $contactId, ['id', 'corp_id', 'employee_id', 'contact_id']);
+        if (empty($contactEmployee) || (int) $contactEmployee['corpId'] !== (int) $user['corpIds'][0]) {
+            throw new CommonException(ErrorCode::INVALID_PARAMS, '客户不属于当前企业成员');
+        }
+        if (! empty($user['dataPermission']) && ! in_array((int) $contactEmployee['employeeId'], array_map('intval', $user['deptEmployeeIds'] ?? []), true)) {
+            throw new CommonException(ErrorCode::INVALID_PARAMS, '客户不在当前数据范围内');
+        }
     }
 
     /**
@@ -188,13 +220,19 @@ class ShowLogic
     private function getEmployee()
     {
         //查询客户归属企业成员
-        $contactEmployee = $this->contactEmployee->getWorkContactEmployeesByContactId((int) $this->contactId, ['employee_id']);
+        $contactEmployee = $this->contactEmployee->getWorkContactEmployeesByCorpIdContactId((int) user()['corpIds'][0], (int) $this->contactId, ['employee_id']);
 
         if (empty($contactEmployee)) {
             return [];
         }
 
         $employeeIds = array_column($contactEmployee, 'employeeId');
+        if (! empty(user()['dataPermission'])) {
+            $employeeIds = array_values(array_intersect(array_map('intval', $employeeIds), array_map('intval', user()['deptEmployeeIds'] ?? [])));
+            if (empty($employeeIds)) {
+                return [];
+            }
+        }
         //根据员工id查询员工姓名
         $employeeInfo = $this->employee->getWorkEmployeesById($employeeIds, ['id', 'name', 'corp_id']);
 

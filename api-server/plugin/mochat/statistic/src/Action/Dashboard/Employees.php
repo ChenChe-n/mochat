@@ -80,8 +80,16 @@ class Employees extends AbstractAction
         $user = user();
         $info = $this->employeesLogic->getCorpTokenInfo($user['corpIds'][0]);
 
-        //取出这个企业的所有成员
-        $employeeList = $this->employeesLogic->getEmployees($user['corpIds'][0]);
+        //取出当前账号数据范围内的成员
+        $employeeList = $this->employeesLogic->getVisibleEmployees($user['corpIds'][0], $user);
+        if (empty($employeeList)) {
+            return [
+                'chat_cnt' => 0,
+                'message_cnt' => 0,
+                'reply_percentage' => 0,
+                'avg_reply_time' => 0,
+            ];
+        }
 
         //取出微信字母id
         $userIds = [];
@@ -96,7 +104,15 @@ class Employees extends AbstractAction
         if ($res['errcode'] !== 0) {
             $this->logger->error(sprintf('获取「联系客户统计」数据 失败::[%s]', json_encode($res, JSON_THROW_ON_ERROR)));
         }
-        $res = $res['behavior_data'];
+        $res = $res['behavior_data'] ?? [];
+        if (empty($res)) {
+            return [
+                'chat_cnt' => 0,
+                'message_cnt' => 0,
+                'reply_percentage' => 0,
+                'avg_reply_time' => 0,
+            ];
+        }
         $result = [
             'chat_cnt' => 0,
             'message_cnt' => 0,

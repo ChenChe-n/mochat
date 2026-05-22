@@ -17,8 +17,10 @@ use Hyperf\HttpServer\Annotation\Middleware;
 use Hyperf\HttpServer\Annotation\Middlewares;
 use Hyperf\HttpServer\Annotation\RequestMapping;
 use MoChat\App\Common\Middleware\DashboardAuthMiddleware;
+use MoChat\App\Rbac\Middleware\PermissionMiddleware;
 use MoChat\App\User\Constants\Status;
 use MoChat\App\User\Contract\UserContract;
+use MoChat\App\WorkEmployee\Contract\WorkEmployeeContract;
 use MoChat\Framework\Action\AbstractAction;
 use MoChat\Framework\Constants\ErrorCode;
 use MoChat\Framework\Exception\CommonException;
@@ -42,13 +44,20 @@ class StatusUpdate extends AbstractAction
 
     /**
      * @Inject
+     * @var WorkEmployeeContract
+     */
+    protected $workEmployeeService;
+
+    /**
+     * @Inject
      * @var StdoutLoggerInterface
      */
     private $logger;
 
     /**
      * @Middlewares({
-     *     @Middleware(DashboardAuthMiddleware::class)
+     *     @Middleware(DashboardAuthMiddleware::class),
+     *     @Middleware(PermissionMiddleware::class)
      * })
      * @RequestMapping(path="/dashboard/user/statusUpdate", methods="put")
      * @return array 返回数组
@@ -57,17 +66,19 @@ class StatusUpdate extends AbstractAction
     {
         ## 参数验证
         $this->validated($this->request->all());
+        $user = user();
         ## 接收参数
         $userId = $this->request->input('userId');
         $status = $this->request->input('status');
 
         ## 验证userId的有效性
-        $userIds = explode(',', $userId);
-        $users = $this->userService->getUsersById($userIds, ['id', 'name', 'status']);
+        $userIds = array_values(array_unique(array_map('intval', explode(',', $userId))));
+        $users = $this->userService->getUsersById($userIds, ['id', 'name', 'status', 'tenant_id', 'is_super_admin']);
         if (count($userIds) != count($users)) {
             $diffUserIds = array_diff($userIds, array_column($users, 'id'));
             throw new CommonException(ErrorCode::INVALID_PARAMS, sprintf('部分账户信息不存在，账户ID：%s', implode('、', $diffUserIds)));
         }
+        $this->assertManageableUsers($users, $user);
         ## 比较操作状态与更新账户的当前状态
         $statusArr = array_column($users, 'status');
         if (in_array($status, $statusArr)) {
@@ -88,6 +99,35 @@ class StatusUpdate extends AbstractAction
         }
 
         return [];
+    }
+
+    private function assertManageableUsers(array $targets, array $user): void
+    {
+        foreach ($targets as $target) {
+            if ((int) $target['tenantId'] !== (int) $user['tenantId']) {
+                throw new CommonException(ErrorCode::INVALID_PARAMS, sprintf('账户%s不属于当前租户，不可操作', $target['name']));
+            }
+            if (! empty($target['isSuperAdmin'])) {
+                throw new CommonException(ErrorCode::INVALID_PARAMS, sprintf('账户%s为超级管理员，不可在此处操作', $target['name']));
+            }
+        }
+        if (! empty($user['isSuperAdmin'])) {
+            return;
+        }
+
+        $targetIds = array_column($targets, 'id');
+        $employees = $this->workEmployeeService->getWorkEmployeesByLogUserIds($targetIds, ['id', 'corp_id', 'log_user_id']);
+        $employeesByUserId = array_column($employees, null, 'logUserId');
+        $allowedEmployeeIds = array_map('intval', $user['deptEmployeeIds'] ?? []);
+        foreach ($targets as $target) {
+            $employee = $employeesByUserId[$target['id']] ?? null;
+            if (empty($employee) || (int) $employee['corpId'] !== (int) $user['corpIds'][0]) {
+                throw new CommonException(ErrorCode::INVALID_PARAMS, sprintf('账户%s未绑定当前企业成员，不可操作', $target['name']));
+            }
+            if (! empty($user['dataPermission']) && ! in_array((int) $employee['id'], $allowedEmployeeIds, true)) {
+                throw new CommonException(ErrorCode::INVALID_PARAMS, sprintf('账户%s不在当前数据范围内，不可操作', $target['name']));
+            }
+        }
     }
 
     /**

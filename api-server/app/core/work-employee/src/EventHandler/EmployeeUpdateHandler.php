@@ -98,7 +98,7 @@ class EmployeeUpdateHandler extends AbstractEventHandler
         }
         $department = ! empty($departmentData['department']) ? $departmentData['department'] : [];
         $edepartment = ! empty($departmentData['edepartment']) ? $departmentData['edepartment'] : [];
-        $updateEmployee = $this->getEmployeeData($employee);
+        $updateEmployee = $this->getEmployeeData($employee, $nextWxUserId);
         //主部门
         if (! empty($this->message['MainDepartment']) && $employee['wxMainDepartmentId'] != $this->message['MainDepartment']) {
             $updateEmployee['main_department_id'] = ! empty($department[$this->message['MainDepartment']]) ? $department[$this->message['MainDepartment']] : $employee['mainDepartmentId'];
@@ -156,7 +156,7 @@ class EmployeeUpdateHandler extends AbstractEventHandler
             if (! empty($updateEmployee)) {
                 $this->workEmployeeService->updateWorkEmployeeById($employee['id'], $updateEmployee);
                 // 员工离职子账户禁用
-                if ($updateEmployee['status'] === 2 && $oldLogUserId > 0) {
+                if (isset($updateEmployee['status']) && (int) $updateEmployee['status'] === 2 && $oldLogUserId > 0) {
                     $this->userService = make(UserContract::class);
                     $this->userService->updateUserStatusByUserId($oldLogUserId, 2);
                 }
@@ -232,7 +232,7 @@ class EmployeeUpdateHandler extends AbstractEventHandler
      * @throws \League\Flysystem\FileExistsException
      * @return array
      */
-    protected function getEmployeeData($employee)
+    protected function getEmployeeData($employee, string $nextWxUserId)
     {
 //        if (! empty($this->message['Avatar'])) {
 //            $pathAvatarFileName = 'employee/avatar_' . microtime(true) * 10000 . '.png';

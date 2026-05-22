@@ -15,6 +15,7 @@ use Hyperf\DbConnection\Db;
 use Hyperf\Di\Annotation\Inject;
 use Hyperf\Redis\Redis;
 use Hyperf\Utils\ApplicationContext;
+use MoChat\App\Rbac\Contract\RbacRoleContract;
 use MoChat\App\Rbac\Contract\RbacUserRoleContract;
 use MoChat\App\User\Contract\UserContract;
 use MoChat\App\WorkEmployee\Contract\WorkEmployeeContract;
@@ -41,6 +42,12 @@ class StoreLogic
      * @var WorkEmployeeContract
      */
     protected $employeeService;
+
+    /**
+     * @Inject
+     * @var RbacRoleContract
+     */
+    protected $rbacRoleService;
 
     /**
      * @Inject
@@ -108,7 +115,8 @@ class StoreLogic
         unset($params['roleId'], $params['employeeId']);
         $corpId = (int) $user['corpIds'][0];
         ## 根据企业微信成员ID绑定子账户，不再依赖企微手机号返回值
-        $employeeData = $this->getBindableEmployee($corpId, $employeeId);
+        $employeeData = $this->getBindableEmployee($corpId, $employeeId, $user);
+        $this->assertRoleBelongsToTenant((int) $roleId, (int) $user['tenantId']);
         ## 数据操作
         Db::beginTransaction();
         try {
@@ -133,7 +141,7 @@ class StoreLogic
         }
     }
 
-    private function getBindableEmployee(int $corpId, int $employeeId): array
+    private function getBindableEmployee(int $corpId, int $employeeId, array $user): array
     {
         $employee = $this->employeeService->getWorkEmployeeById($employeeId, ['id', 'corp_id', 'log_user_id', 'wx_user_id']);
         if (empty($employee) || (int) $employee['corpId'] !== $corpId || empty($employee['wxUserId'])) {
@@ -142,8 +150,22 @@ class StoreLogic
         if (! empty($employee['logUserId'])) {
             throw new CommonException(ErrorCode::INVALID_PARAMS, '该企业微信成员已绑定其他子账户');
         }
+        if (! empty($user['dataPermission']) && ! in_array((int) $employee['id'], array_map('intval', $user['deptEmployeeIds'] ?? []), true)) {
+            throw new CommonException(ErrorCode::INVALID_PARAMS, '该企业微信成员不在当前数据范围内');
+        }
 
         return $employee;
+    }
+
+    private function assertRoleBelongsToTenant(int $roleId, int $tenantId): void
+    {
+        if (empty($roleId)) {
+            return;
+        }
+        $role = $this->rbacRoleService->getRbacRolesByIdTenantId($roleId, $tenantId, ['id']);
+        if (empty($role)) {
+            throw new CommonException(ErrorCode::INVALID_PARAMS, '请选择当前租户下有效的角色');
+        }
     }
 
     private function refreshUserCorpCache(int $userId, int $corpId, int $employeeId): void

@@ -15,6 +15,7 @@ use Hyperf\DbConnection\Db;
 use Hyperf\Di\Annotation\Inject;
 use Hyperf\Redis\Redis;
 use Hyperf\Utils\ApplicationContext;
+use MoChat\App\Rbac\Contract\RbacRoleContract;
 use MoChat\App\Rbac\Contract\RbacUserRoleContract;
 use MoChat\App\User\Contract\UserContract;
 use MoChat\App\WorkEmployee\Contract\WorkEmployeeContract;
@@ -42,6 +43,12 @@ class UpdateLogic
 
     /**
      * @Inject
+     * @var RbacRoleContract
+     */
+    protected $rbacRoleService;
+
+    /**
+     * @Inject
      * @var RbacUserRoleContract
      */
     protected $rbacUserRoleService;
@@ -60,9 +67,19 @@ class UpdateLogic
     public function handle(array $params, array $user): array
     {
         ## 验证userId的有效性
-        $userInfo = $this->userService->getUserById((int) $params['userId'], ['id']);
-        if (empty($userInfo)) {
+        $userInfo = $this->userService->getUserById((int) $params['userId'], ['id', 'tenant_id', 'is_super_admin']);
+        if (empty($userInfo) || (int) $userInfo['tenantId'] !== (int) $user['tenantId']) {
             throw new CommonException(ErrorCode::INVALID_PARAMS, '当前账户不存在，不可操作');
+        }
+        if (! empty($userInfo['isSuperAdmin'])) {
+            throw new CommonException(ErrorCode::INVALID_PARAMS, '超级管理员账户不可在此处操作');
+        }
+        $oldEmployee = $this->employeeService->getWorkEmployeeByCorpIdLogUserId((int) $user['corpIds'][0], (int) $params['userId'], ['id']);
+        if (empty($oldEmployee)) {
+            throw new CommonException(ErrorCode::INVALID_PARAMS, '当前账户未绑定当前企业成员，不可操作');
+        }
+        if (! empty($user['dataPermission']) && ! in_array((int) $oldEmployee['id'], array_map('intval', $user['deptEmployeeIds'] ?? []), true)) {
+            throw new CommonException(ErrorCode::INVALID_PARAMS, '当前账户不在当前数据范围内，不可操作');
         }
         ## 判断手机号是否重复
         $phoneUser = $this->userService->getUsersByPhone([$params['phone']], ['id']);
@@ -90,9 +107,9 @@ class UpdateLogic
         ## 角色信息
         $oldRoleInfo = $this->findOldRoleInfo($userId);
         if (isset($oldRoleInfo['id'])) {
-            if ($oldRoleInfo['id'] != $params['roleId']) {
+            if ($oldRoleInfo['roleId'] != $params['roleId']) {
                 $data['deleteRole'] = [
-                    'roleId' => (int) $oldRoleInfo['id'],
+                    'id' => (int) $oldRoleInfo['id'],
                 ];
                 empty($params['roleId']) || $data['addRole'] = [
                     'user_id' => $userId,
@@ -122,7 +139,7 @@ class UpdateLogic
      */
     private function findOldRoleInfo(int $userId): array
     {
-        $roleInfo = $this->rbacUserRoleService->getRbacUserRoleByUserId($userId, ['id']);
+        $roleInfo = $this->rbacUserRoleService->getRbacUserRoleByUserId($userId, ['id', 'role_id']);
         return $roleInfo ?? [];
     }
 
@@ -134,7 +151,8 @@ class UpdateLogic
     {
         $userId = $sqlData['updateUser']['where']['id'];
         $corpId = (int) $user['corpIds'][0];
-        $employeeData = $this->getBindableEmployee($corpId, (int) $params['employeeId'], (int) $userId);
+        $employeeData = $this->getBindableEmployee($corpId, (int) $params['employeeId'], (int) $userId, $user);
+        $this->assertRoleBelongsToTenant((int) $params['roleId'], (int) $user['tenantId']);
         ## 数据操作
         Db::beginTransaction();
         try {
@@ -148,7 +166,7 @@ class UpdateLogic
             $this->employeeService->updateWorkEmployeeById((int) $employeeData['id'], ['log_user_id' => $userId]);
             $this->refreshUserCorpCache((int) $userId, $corpId, (int) $employeeData['id']);
             ## 旧角色
-            isset($sqlData['deleteRole']) && $this->rbacUserRoleService->deleteRbacUserRole($sqlData['deleteRole']['roleId']);
+            isset($sqlData['deleteRole']) && $this->rbacUserRoleService->deleteRbacUserRole($sqlData['deleteRole']['id']);
             ## 新角色
             isset($sqlData['addRole']) && $this->rbacUserRoleService->createRbacUserRole($sqlData['addRole']);
 
@@ -161,7 +179,7 @@ class UpdateLogic
         }
     }
 
-    private function getBindableEmployee(int $corpId, int $employeeId, int $userId): array
+    private function getBindableEmployee(int $corpId, int $employeeId, int $userId, array $user): array
     {
         $employee = $this->employeeService->getWorkEmployeeById($employeeId, ['id', 'corp_id', 'log_user_id', 'wx_user_id']);
         if (empty($employee) || (int) $employee['corpId'] !== $corpId || empty($employee['wxUserId'])) {
@@ -170,8 +188,22 @@ class UpdateLogic
         if (! empty($employee['logUserId']) && (int) $employee['logUserId'] !== $userId) {
             throw new CommonException(ErrorCode::INVALID_PARAMS, '该企业微信成员已绑定其他子账户');
         }
+        if (! empty($user['dataPermission']) && ! in_array((int) $employee['id'], array_map('intval', $user['deptEmployeeIds'] ?? []), true)) {
+            throw new CommonException(ErrorCode::INVALID_PARAMS, '该企业微信成员不在当前数据范围内');
+        }
 
         return $employee;
+    }
+
+    private function assertRoleBelongsToTenant(int $roleId, int $tenantId): void
+    {
+        if (empty($roleId)) {
+            return;
+        }
+        $role = $this->rbacRoleService->getRbacRolesByIdTenantId($roleId, $tenantId, ['id']);
+        if (empty($role)) {
+            throw new CommonException(ErrorCode::INVALID_PARAMS, '请选择当前租户下有效的角色');
+        }
     }
 
     private function refreshUserCorpCache(int $userId, int $corpId, int $employeeId): void

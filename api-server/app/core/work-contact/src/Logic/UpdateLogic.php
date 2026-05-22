@@ -96,6 +96,8 @@ class UpdateLogic
     public function handle(array $params)
     {
         $this->params = $params;
+        $this->assertVisibleContactEmployee();
+        $this->assertTagsBelongToCurrentCorp();
 
         if (isset($this->params['tag'])) {
             //修改标签并记录轨迹
@@ -338,6 +340,41 @@ class UpdateLogic
             'wxTagIds' => $wxTagIds,
             'tagName' => $tagName,
         ];
+    }
+
+    private function assertVisibleContactEmployee(): void
+    {
+        $user = user();
+        $contactEmployee = $this->contactEmployee->findWorkContactEmployeeByOtherIds((int) $this->params['employeeId'], (int) $this->params['contactId'], ['id', 'corp_id', 'employee_id', 'contact_id']);
+        if (empty($contactEmployee) || (int) $contactEmployee['corpId'] !== (int) $user['corpIds'][0]) {
+            throw new CommonException(ErrorCode::INVALID_PARAMS, '客户不属于当前企业成员');
+        }
+        if (! empty($user['dataPermission']) && ! in_array((int) $contactEmployee['employeeId'], array_map('intval', $user['deptEmployeeIds'] ?? []), true)) {
+            throw new CommonException(ErrorCode::INVALID_PARAMS, '客户不在当前数据范围内');
+        }
+    }
+
+    private function assertTagsBelongToCurrentCorp(): void
+    {
+        if (! isset($this->params['tag'])) {
+            return;
+        }
+        $tagIds = array_values(array_unique(array_map('intval', (array) $this->params['tag'])));
+        $tagIds = array_filter($tagIds);
+        if (empty($tagIds)) {
+            $this->params['tag'] = [];
+            return;
+        }
+        $tags = $this->contactTag->getWorkContactTagsById($tagIds, ['id', 'corp_id']);
+        if (count($tags) !== count($tagIds)) {
+            throw new CommonException(ErrorCode::INVALID_PARAMS, '标签不存在');
+        }
+        foreach ($tags as $tag) {
+            if ((int) $tag['corpId'] !== (int) user()['corpIds'][0]) {
+                throw new CommonException(ErrorCode::INVALID_PARAMS, '标签不属于当前企业');
+            }
+        }
+        $this->params['tag'] = $tagIds;
     }
 
     /**

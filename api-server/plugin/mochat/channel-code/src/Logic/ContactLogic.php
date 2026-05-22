@@ -74,6 +74,14 @@ class ContactLogic
         //渠道码标识
         $state = 'channelCode-' . $this->params['channelCodeId'];
         $where['state'] = [$state];
+        $where['corp_id'] = user()['corpIds'][0];
+        if (user()['dataPermission'] != 0) {
+            $employeeIds = array_map('intval', user()['deptEmployeeIds'] ?? []);
+            if (empty($employeeIds)) {
+                return $this->emptyPage();
+            }
+            $where[] = ['employee_id', 'IN', $employeeIds];
+        }
         $options = [
             'orderByRaw' => 'create_time desc',
             'perPage' => isset($this->params['perPage']) ? (int) $this->params['perPage'] : 15,
@@ -91,14 +99,7 @@ class ContactLogic
         $info = $this->workContactEmployee->getWorkContactEmployeeList($where, $columns, $options);
 
         if (empty($info['data'])) {
-            return [
-                'page' => [
-                    'perPage' => 15,
-                    'total' => 0,
-                    'totalPage' => 0,
-                ],
-                'list' => [],
-            ];
+            return $this->emptyPage();
         }
 
         $contactIds = array_unique(array_column($info['data'], 'contactId'));
@@ -184,5 +185,17 @@ class ContactLogic
         }
 
         return array_column($contact, null, 'id');
+    }
+
+    private function emptyPage(): array
+    {
+        return [
+            'page' => [
+                'perPage' => 15,
+                'total' => 0,
+                'totalPage' => 0,
+            ],
+            'list' => [],
+        ];
     }
 }

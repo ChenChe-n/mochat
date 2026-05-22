@@ -73,6 +73,8 @@ class UnassignedListLogic
      */
     public function getUnassignedList($params)
     {
+        $user = user();
+        $visibleEmployeeIds = empty($user['dataPermission']) ? null : array_map('intval', $user['deptEmployeeIds'] ?? []);
         $unassignedList = $this->workUnassignedService->getWorkUnassignedByCorpId([$params['corpId']]);
 
         $lastTime = '无数据';
@@ -99,7 +101,13 @@ class UnassignedListLogic
         foreach ($unassignedList as $item) {
             $employee = $this->workEmployeeService->getWorkEmployeeByCorpIdAndWxUserId($params['corpId'], $item['handoverUserid']);
             $contact = $this->workContactService->getWorkContactByCorpIdWxExternalUserId($params['corpId'], $item['externalUserid']);
+            if (empty($employee) || empty($contact) || ($visibleEmployeeIds !== null && ! in_array((int) $employee['id'], $visibleEmployeeIds, true))) {
+                continue;
+            }
             $contactEmployee = $this->workContactEmployeeService->findWorkContactEmployeeByOtherIds($employee['id'], $contact['id']);
+            if (empty($contactEmployee)) {
+                continue;
+            }
             $tags = $this->workContactTagPivotService->getWorkContactTagPivotsByContactIdEmployeeId([$contactEmployee['contactId']], $contactEmployee['employeeId']);
             $tagName = [];
             foreach ($tags as $tag) {

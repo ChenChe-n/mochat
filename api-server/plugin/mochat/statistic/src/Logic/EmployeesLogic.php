@@ -52,6 +52,23 @@ class EmployeesLogic
         return $this->workEmployee->getWorkEmployeesByCorpId($corpId);
     }
 
+    public function getVisibleEmployees(int $corpId, array $user): array
+    {
+        if (empty($user['dataPermission'])) {
+            return $this->getEmployees($corpId);
+        }
+
+        $employeeIds = array_map('intval', $user['deptEmployeeIds'] ?? []);
+        if (empty($employeeIds)) {
+            return [];
+        }
+
+        $employees = $this->workEmployee->getWorkEmployeesById($employeeIds);
+        return array_values(array_filter($employees, static function ($employee) use ($corpId) {
+            return (int) $employee['corpId'] === $corpId;
+        }));
+    }
+
     /**
      * 根据id查询多条成员数据.
      * @return array
