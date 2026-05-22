@@ -101,7 +101,7 @@ class PasswordReset extends AbstractAction
     {
         return [
             'id' => 'required|min:1',
-            'newPassword' => 'required|min:1|alpha_num|bail',
+            'newPassword' => 'required|string|min:1|bail',
         ];
     }
 
@@ -115,7 +115,6 @@ class PasswordReset extends AbstractAction
             'id.required' => '用户id 必填',
             'newPassword.required' => '新密码 必填',
             'newPassword.min' => '新密码 不可为空',
-            'newPassword.alpha_num' => '新密码 组成必须是字母或数字',
         ];
     }
 }

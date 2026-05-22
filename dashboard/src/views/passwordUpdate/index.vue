@@ -11,13 +11,13 @@
           <h3>{{ userPhone }}</h3>
         </a-form-model-item>
         <a-form-model-item label="旧密码：">
-          <a-input v-model="form.oldPassword" />
+          <a-input-password v-model="form.oldPassword" />
         </a-form-model-item>
         <a-form-model-item label="新密码：">
-          <a-input v-model="form.newPassword" />
+          <a-input-password v-model="form.newPassword" />
         </a-form-model-item>
         <a-form-model-item label="确认新密码：">
-          <a-input v-model="form.againNewPassword" />
+          <a-input-password v-model="form.againNewPassword" />
         </a-form-model-item>
         <div class="footer">
           <a-button v-permission="'/passwordUpdate/index@save'" type="primary" @click="updatePassWord">保存</a-button>

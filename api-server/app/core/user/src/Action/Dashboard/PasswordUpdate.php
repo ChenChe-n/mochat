@@ -107,8 +107,8 @@ class PasswordUpdate extends AbstractAction
     protected function rules(): array
     {
         return [
-            'oldPassword' => 'required|min:1|alpha_num|bail',
-            'newPassword' => 'required|min:1|alpha_num|bail',
+            'oldPassword' => 'required|string|min:1|bail',
+            'newPassword' => 'required|string|min:1|bail',
             'againNewPassword' => 'required|same:newPassword|bail',
         ];
     }
@@ -122,10 +122,8 @@ class PasswordUpdate extends AbstractAction
         return [
             'oldPassword.required' => '旧密码 必填',
             'oldPassword.min' => '旧密码 不可为空',
-            'oldPassword.alpha_num' => '旧密码 组成必须是字母或数字',
             'newPassword.required' => '新密码 必填',
             'newPassword.min' => '新密码 不可为空',
-            'newPassword.alpha_num' => '新密码 组成必须是字母或数字',
             'againNewPassword.required' => '确认新密码 必填',
             'againNewPassword.same' => '确认新密码 必须和新密码一致',
         ];
